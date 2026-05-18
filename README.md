@@ -35,7 +35,7 @@
 
   📦 Instalación Rápida
 
-   1 git clone https://github.com/tu-usuario/ultraexplorer.git
+   1 git clone https://github.com/elementos123/ultraexplorer.git
    2 cd ultraexplorer
    3 pip install -r requirements.txt
    4 python main.py
