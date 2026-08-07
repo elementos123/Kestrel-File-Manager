@@ -101,10 +101,17 @@ QtAwesome icon set · `send2trash` for safe deletes.
 - Linux: `./linux/build_appimage.sh` (Ubuntu/Debian; installs its own build
   dependencies).
 
+### Contributing
+
+Bug reports, feature requests, and pull requests are welcome — see
+[CONTRIBUTING.md](CONTRIBUTING.md) for how to get started, and please follow
+the [Code of Conduct](CODE_OF_CONDUCT.md). Found a security issue? See
+[SECURITY.md](SECURITY.md) instead of opening a public issue.
+
 ### License
 
-No license has been chosen for this project yet — all rights reserved by
-default until one is added.
+[MIT](LICENSE) — do pretty much whatever you want with it, just keep the
+copyright notice.
 
 ---
 
@@ -203,7 +210,15 @@ Iconos QtAwesome · `send2trash` para borrado seguro.
 - Linux: `./linux/build_appimage.sh` (Ubuntu/Debian; instala sus propias
   dependencias de compilación).
 
+### Contribuir
+
+Reportes de errores, sugerencias de funciones y pull requests son
+bienvenidos — mira [CONTRIBUTING.md](CONTRIBUTING.md) para saber cómo
+empezar, y por favor sigue el [Código de Conducta](CODE_OF_CONDUCT.md).
+¿Encontraste un problema de seguridad? Mira [SECURITY.md](SECURITY.md) en
+vez de abrir un issue público.
+
 ### Licencia
 
-Este proyecto todavía no tiene una licencia elegida — todos los derechos
-reservados por defecto hasta que se añada una.
+[MIT](LICENSE) — haz prácticamente lo que quieras con el código, solo
+mantén el aviso de copyright.
