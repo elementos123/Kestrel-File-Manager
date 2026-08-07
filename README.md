@@ -1,4 +1,4 @@
-# 🚀 UltraExplorer — Next-Gen File Manager for Power Users
+# UltraExplorer — Next-Gen File Manager for Power Users
 
 A fast, keyboard-first file manager built with Python 3 and PyQt6, combining
 the muscle memory of classic file managers with a modern Fluent Design
