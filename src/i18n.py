@@ -209,6 +209,29 @@ STRINGS: dict[str, dict[str, str]] = {
         "dlg.settings.tab.behavior": "Comportamiento",
         "dlg.settings.tab.tools": "Herramientas",
         "dlg.settings.tab.system": "Sistema",
+        "dfm.section": "Explorador de archivos predeterminado",
+        "dfm.hint_windows": (
+            "Al activarlo, hacer doble clic en una carpeta o unidad — o pulsar Win+E — "
+            "la abrirá con UltraExplorer en vez del explorador del sistema. Solo afecta "
+            "a tu usuario y puedes quitarlo cuando quieras desde aquí mismo."
+        ),
+        "dfm.hint_linux": (
+            "Al activarlo, tu escritorio abrirá las carpetas con UltraExplorer en vez "
+            "del explorador del sistema. Solo afecta a tu usuario y puedes quitarlo "
+            "cuando quieras desde aquí mismo. Linux no tiene un atajo de teclado "
+            "universal equivalente a Win+E (depende del escritorio) — puedes asignar "
+            "uno tú mismo en los ajustes de atajos de tu entorno, apuntando a "
+            "UltraExplorer."
+        ),
+        "dfm.is_default": "✓  UltraExplorer es tu explorador predeterminado",
+        "dfm.not_default": "UltraExplorer no es tu explorador predeterminado",
+        "dfm.set_button": "Establecer como predeterminado",
+        "dfm.unset_button": "Quitar como predeterminado",
+        "dfm.unsupported": "No disponible en esta plataforma",
+        "dfm.set_ok": "Listo — UltraExplorer es ahora tu explorador predeterminado.",
+        "dfm.unset_ok": "Hecho — se restauró el explorador predeterminado anterior.",
+        "dfm.error_title": "Explorador predeterminado",
+        "dfm.error_body": "No se pudo completar la operación:\n{error}",
         "dlg.settings.language_label": "Idioma",
         "dlg.settings.language_auto": "Automático (sistema)",
         "dlg.settings.language_es": "Español",
@@ -478,6 +501,30 @@ STRINGS: dict[str, dict[str, str]] = {
         "dlg.settings.tab.behavior": "Behavior",
         "dlg.settings.tab.tools": "Tools",
         "dlg.settings.tab.system": "System",
+        "dfm.section": "Default file manager",
+        "dfm.hint_windows": (
+            "Turning this on makes double-clicking a folder or drive — or pressing "
+            "Win+E — open it with UltraExplorer instead of the system file manager. "
+            "Only affects your user account, and you can remove it any time from "
+            "right here."
+        ),
+        "dfm.hint_linux": (
+            "Turning this on makes your desktop open folders with UltraExplorer "
+            "instead of the system file manager. Only affects your user account, and "
+            "you can remove it any time from right here. Linux has no universal "
+            "keyboard shortcut equivalent to Win+E (it depends on your desktop "
+            "environment) — you can bind one yourself in your desktop's shortcut "
+            "settings, pointing it at UltraExplorer."
+        ),
+        "dfm.is_default": "✓  UltraExplorer is your default file manager",
+        "dfm.not_default": "UltraExplorer is not your default file manager",
+        "dfm.set_button": "Set as default",
+        "dfm.unset_button": "Remove as default",
+        "dfm.unsupported": "Not available on this platform",
+        "dfm.set_ok": "Done — UltraExplorer is now your default file manager.",
+        "dfm.unset_ok": "Done — restored your previous default file manager.",
+        "dfm.error_title": "Default file manager",
+        "dfm.error_body": "Couldn't complete the operation:\n{error}",
         "dlg.settings.language_label": "Language",
         "dlg.settings.language_auto": "Automatic (system)",
         "dlg.settings.language_es": "Español",

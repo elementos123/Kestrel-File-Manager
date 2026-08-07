@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -1195,6 +1196,28 @@ class SettingsDialog(QDialog):
         self._terminal_combo.setCurrentIndex(keys.index(pref) if pref in keys else 0)
         L.addWidget(self._row("Terminal:", self._terminal_combo))
 
+        # ── Explorador de archivos predeterminado ─────────
+        L.addWidget(self._sec(t("dfm.section")))
+
+        dfm_w = QWidget()
+        dfm_l = QVBoxLayout(dfm_w)
+        dfm_l.setContentsMargins(20, 2, 0, 6)
+        dfm_l.setSpacing(8)
+
+        self._dfm_status_lbl = QLabel()
+        self._dfm_status_lbl.setStyleSheet("font-size: 12px;")
+        dfm_l.addWidget(self._dfm_status_lbl)
+
+        self._dfm_btn = QPushButton()
+        self._dfm_btn.setFixedWidth(240)
+        self._dfm_btn.clicked.connect(self._toggle_default_file_manager)
+        dfm_l.addWidget(self._dfm_btn)
+
+        L.addWidget(dfm_w)
+        dfm_hint_key = "dfm.hint_windows" if sys.platform == "win32" else "dfm.hint_linux"
+        L.addWidget(self._hint(t(dfm_hint_key)))
+        self._refresh_dfm_ui()
+
         # ── Importar / Exportar ──────────────────────────
         L.addWidget(self._sec("Importar / Exportar configuración"))
 
@@ -1233,6 +1256,38 @@ class SettingsDialog(QDialog):
 
         L.addStretch()
         return scroll
+
+    def _refresh_dfm_ui(self):
+        from src import system_integration as sysint
+        if not sysint.is_supported():
+            self._dfm_status_lbl.setText(t("dfm.unsupported"))
+            self._dfm_status_lbl.setStyleSheet("font-size: 12px; color: #888;")
+            self._dfm_btn.setEnabled(False)
+            self._dfm_btn.setText(t("dfm.set_button"))
+            return
+        if sysint.is_default():
+            self._dfm_status_lbl.setText(t("dfm.is_default"))
+            self._dfm_status_lbl.setStyleSheet("font-size: 12px; color: #4ec9b0;")
+            self._dfm_btn.setText(t("dfm.unset_button"))
+        else:
+            self._dfm_status_lbl.setText(t("dfm.not_default"))
+            self._dfm_status_lbl.setStyleSheet("font-size: 12px; color: #888;")
+            self._dfm_btn.setText(t("dfm.set_button"))
+
+    def _toggle_default_file_manager(self):
+        from src import system_integration as sysint
+        if sysint.is_default():
+            ok, err = sysint.unset_default()
+            ok_msg = t("dfm.unset_ok")
+        else:
+            ok, err = sysint.set_default()
+            ok_msg = t("dfm.set_ok")
+        if ok:
+            QMessageBox.information(self, t("dfm.section"), ok_msg)
+        else:
+            get_logger("settings").error("Default-file-manager toggle failed: %s", err)
+            QMessageBox.warning(self, t("dfm.error_title"), t("dfm.error_body", error=err))
+        self._refresh_dfm_ui()
 
     def _export_settings(self):
         import shutil

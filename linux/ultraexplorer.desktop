@@ -8,3 +8,4 @@ Icon=ultraexplorer
 Categories=Utility;FileManager;System;
 Terminal=false
 StartupWMClass=UltraExplorer
+MimeType=inode/directory;

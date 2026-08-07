@@ -31,6 +31,22 @@ Python 3 instalado en el sistema.
 ./linux/install.sh --uninstall  # desinstala
 ```
 
+## Explorador de archivos predeterminado y atajo de teclado
+
+Desde **Ajustes → Sistema** puedes marcar UltraExplorer como el explorador de
+archivos predeterminado (usa el mecanismo estándar de asociaciones MIME de
+freedesktop — `~/.config/mimeapps.list`). Es reversible desde el mismo sitio.
+
+Linux no tiene un atajo de teclado universal equivalente a "Win+E" — depende
+de cada entorno de escritorio. Para asignar uno tú mismo:
+
+- **GNOME**: Ajustes → Teclado → Atajos personalizados → añade uno nuevo con
+  el comando `ultraexplorer` (o la ruta a la AppImage) y la combinación que
+  prefieras (ej. Super+E).
+- **KDE Plasma**: Ajustes del sistema → Atajos → Atajos personalizados → añade
+  una acción nueva de tipo "Comando/URL" apuntando a `ultraexplorer`.
+- **XFCE**: Ajustes → Teclado → pestaña Atajos de aplicación → añadir.
+
 ## Archivos de esta carpeta
 
 - `ultraexplorer.desktop` — entrada de escritorio (freedesktop).
