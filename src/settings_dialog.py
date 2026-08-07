@@ -12,12 +12,15 @@ from PyQt6.QtWidgets import (
     QHeaderView, QMessageBox, QButtonGroup,
     QTextEdit,
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSize
 from PyQt6.QtGui import QColor, QFont, QFontDatabase
 
 from src.toggle_switch import ToggleSwitch
 
 from src.themes import THEMES
+from src.i18n import t, set_language
+from src.logger import get_logger
+from src import icon_provider as ico
 
 
 SETTINGS_FILE = str(Path.home() / ".file_explorer_settings.json")
@@ -43,6 +46,7 @@ _FONT_PREVIEW_EXCLUDE = {
 
 _DEFAULTS: dict[str, Any] = {
     # Appearance
+    "language":           "auto",
     "theme":              "dark_fluent",
     "accent_color":       "",
     "font_family":        "Segoe UI",
@@ -96,6 +100,8 @@ _DEFAULTS: dict[str, Any] = {
     "external_tools":     [],
     # System
     "terminal":           "auto",
+    # Onboarding
+    "onboarding_shown":   False,
 }
 
 
@@ -106,7 +112,11 @@ def load_settings() -> dict[str, Any]:
             result = dict(_DEFAULTS)
             result.update(data)
             return result
+    except FileNotFoundError:
+        return dict(_DEFAULTS)
     except Exception:
+        from src.logger import get_logger
+        get_logger("settings").exception("Failed to load settings from %s", SETTINGS_FILE)
         return dict(_DEFAULTS)
 
 
@@ -115,7 +125,8 @@ def save_settings(settings: dict[str, Any]) -> None:
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2)
     except Exception:
-        pass
+        from src.logger import get_logger
+        get_logger("settings").exception("Failed to save settings to %s", SETTINGS_FILE)
 
 
 # ── Color picker button ────────────────────────────────────
@@ -183,7 +194,7 @@ class SettingsDialog(QDialog):
 
     def __init__(self, current: dict[str, Any], parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Configuración")
+        self.setWindowTitle(t("dlg.settings.title"))
         self.setMinimumWidth(500)
         self.setMinimumHeight(520)
         self.setModal(True)
@@ -201,13 +212,14 @@ class SettingsDialog(QDialog):
         root.setContentsMargins(0, 0, 0, 12)
 
         self._tabs = QTabWidget()
-        self._tabs.addTab(self._build_appearance(),  "🎨  Apariencia")
-        self._tabs.addTab(self._build_view(),        "📂  Archivos")
-        self._tabs.addTab(self._build_panels(),      "🪟  Paneles")
-        self._tabs.addTab(self._build_search(),      "🔍  Búsqueda")
-        self._tabs.addTab(self._build_behavior(),    "⚙  Comportamiento")
-        self._tabs.addTab(self._build_tools(),       "🛠  Herramientas")
-        self._tabs.addTab(self._build_system(),      "🖥  Sistema")
+        self._tabs.setIconSize(QSize(16, 16))
+        self._tabs.addTab(self._build_appearance(),  ico.tab_appearance(), t("dlg.settings.tab.appearance"))
+        self._tabs.addTab(self._build_view(),        ico.tab_files(),      t("dlg.settings.tab.files"))
+        self._tabs.addTab(self._build_panels(),      ico.tab_panels(),     t("dlg.settings.tab.panels"))
+        self._tabs.addTab(self._build_search(),      ico.tab_search(),     t("dlg.settings.tab.search"))
+        self._tabs.addTab(self._build_behavior(),    ico.tab_behavior(),   t("dlg.settings.tab.behavior"))
+        self._tabs.addTab(self._build_tools(),       ico.tab_tools(),      t("dlg.settings.tab.tools"))
+        self._tabs.addTab(self._build_system(),      ico.tab_system(),     t("dlg.settings.tab.system"))
         root.addWidget(self._tabs)
 
         root.addSpacing(4)
@@ -229,8 +241,8 @@ class SettingsDialog(QDialog):
         btns.rejected.connect(self.reject)
         ok_btn = btns.button(QDialogButtonBox.StandardButton.Ok)
         ok_btn.setObjectName("AccentButton")
-        ok_btn.setText("Guardar")
-        btns.button(QDialogButtonBox.StandardButton.Cancel).setText("Cancelar")
+        ok_btn.setText(t("common.save"))
+        btns.button(QDialogButtonBox.StandardButton.Cancel).setText(t("common.cancel"))
 
         btn_row.addWidget(btns)
         root.addLayout(btn_row)
@@ -363,6 +375,7 @@ class SettingsDialog(QDialog):
         """Read all widgets → return settings dict (does NOT save to disk)."""
         s = dict(self._settings)
         # Appearance
+        s["language"]           = self._language_combo.currentData()
         s["theme"]              = self._theme_combo.currentData()
         s["font_family"]        = self._font_family_combo.currentText().strip() or "Segoe UI"
         s["monospace_font"]     = self._monospace_combo.currentText().strip() or "Consolas"
@@ -556,6 +569,18 @@ class SettingsDialog(QDialog):
         preset_hl.addStretch()
         L.addWidget(preset_w)
         L.addWidget(self._hint("Los perfiles ajustan tema, densidad, tamaño, bordes, filas y barra de herramientas. Puedes retocar cualquier valor después."))
+
+        # ── Idioma ───────────────────────────────────────
+        L.addWidget(self._sec(t("dlg.settings.language_label")))
+
+        self._language_combo = QComboBox()
+        self._language_combo.addItem(t("dlg.settings.language_auto"), "auto")
+        self._language_combo.addItem(t("dlg.settings.language_es"),   "es")
+        self._language_combo.addItem(t("dlg.settings.language_en"),   "en")
+        lang_map = {"auto": 0, "es": 1, "en": 2}
+        self._language_combo.setCurrentIndex(lang_map.get(self._settings.get("language", "auto"), 0))
+        L.addWidget(self._row(t("dlg.settings.language_label") + ":", self._language_combo))
+        L.addWidget(self._hint(t("dlg.settings.language_restart_note")))
 
         # ── Tema ─────────────────────────────────────────
         L.addWidget(self._sec("Tema"))
@@ -1218,9 +1243,10 @@ class SettingsDialog(QDialog):
         if path:
             try:
                 shutil.copy2(SETTINGS_FILE, path)
-                QMessageBox.information(self, "Exportado", f"Configuración exportada a:\n{path}")
+                QMessageBox.information(self, t("settings.exported_title"), t("settings.exported_body", path=path))
             except Exception as e:
-                QMessageBox.warning(self, "Error", str(e))
+                get_logger("settings").exception("Failed to export settings to %s", path)
+                QMessageBox.warning(self, t("err.settings_export_title"), str(e))
 
     def _import_settings(self):
         import shutil
@@ -1239,16 +1265,16 @@ class SettingsDialog(QDialog):
             self._settings = merged
             save_settings(merged)
             self.settings_changed.emit(merged)
-            QMessageBox.information(self, "Importado",
-                "Configuración importada. Reinicia la app para ver todos los cambios.")
+            QMessageBox.information(self, t("settings.imported_title"), t("settings.imported_body"))
             self.accept()
         except Exception as e:
-            QMessageBox.warning(self, "Error al importar", str(e))
+            get_logger("settings").exception("Failed to import settings from %s", path)
+            QMessageBox.warning(self, t("err.settings_import_title"), str(e))
 
     def _reset_defaults(self):
         r = QMessageBox.question(
-            self, "Restablecer configuración",
-            "¿Restablecer todos los ajustes a sus valores por defecto?",
+            self, t("settings.reset_title"),
+            t("settings.reset_body"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )

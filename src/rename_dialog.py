@@ -11,8 +11,14 @@ from PyQt6.QtWidgets import (
     QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QDialogButtonBox, QMessageBox, QFrame,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QColor, QFont
+
+from src.i18n import t
+from src.logger import get_logger
+from src import icon_provider as ico
+
+_log = get_logger("rename_dialog")
 
 
 class RenameDialog(QDialog):
@@ -25,7 +31,7 @@ class RenameDialog(QDialog):
             return
 
         n = len(self._paths)
-        self.setWindowTitle(f"Renombrar {n} elemento{'s' if n != 1 else ''}")
+        self.setWindowTitle(t("dlg.rename.title", n=n, plural="s" if n != 1 else ""))
         self.setMinimumWidth(640)
         self.setMinimumHeight(520)
         self.setModal(True)
@@ -36,10 +42,11 @@ class RenameDialog(QDialog):
 
         # ── Mode tabs ─────────────────────────────────────
         self._tabs = QTabWidget()
-        self._tabs.addTab(self._build_replace_tab(),  "🔎  Buscar y reemplazar")
-        self._tabs.addTab(self._build_add_tab(),      "✚  Añadir texto")
-        self._tabs.addTab(self._build_number_tab(),   "🔢  Numeración")
-        self._tabs.addTab(self._build_case_tab(),     "Aa  Capitalización")
+        self._tabs.setIconSize(QSize(15, 15))
+        self._tabs.addTab(self._build_replace_tab(),  ico.search_icon(),    t("dlg.rename.tab.replace"))
+        self._tabs.addTab(self._build_add_tab(),      ico.add_text_icon(),  t("dlg.rename.tab.add"))
+        self._tabs.addTab(self._build_number_tab(),   ico.numbering_icon(), t("dlg.rename.tab.number"))
+        self._tabs.addTab(self._build_case_tab(),     ico.case_icon(),      t("dlg.rename.tab.case"))
         self._tabs.currentChanged.connect(self._refresh_preview)
         root.addWidget(self._tabs)
 
@@ -72,7 +79,7 @@ class RenameDialog(QDialog):
         )
         apply_btn = btns.button(QDialogButtonBox.StandardButton.Apply)
         apply_btn.setObjectName("AccentButton")
-        apply_btn.setText("Aplicar renombrado")
+        apply_btn.setText(t("dlg.rename.apply"))
         apply_btn.clicked.connect(self._apply)
         btns.rejected.connect(self.reject)
         root.addWidget(btns)
@@ -302,17 +309,18 @@ class RenameDialog(QDialog):
                 continue
             new_path = os.path.join(os.path.dirname(path), new_name)
             if os.path.exists(new_path):
-                errors.append(f"{new_name}  (ya existe)")
+                errors.append(f"{new_name}{t('dlg.rename.name_exists')}")
                 continue
             try:
                 os.rename(path, new_path)
                 done.append((path, new_path))
             except Exception as e:
+                _log.exception("Failed to rename %s -> %s", path, new_path)
                 errors.append(f"{old_name}: {e}")
 
         if errors:
-            QMessageBox.warning(self, "Errores al renombrar",
-                "No se pudieron renombrar:\n" + "\n".join(errors[:10]))
+            QMessageBox.warning(self, t("err.rename_multi_title"),
+                t("err.rename_multi_body", errors="\n".join(errors[:10])))
 
         if done:
             self.renamed.emit(done)

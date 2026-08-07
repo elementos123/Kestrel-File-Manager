@@ -11,8 +11,13 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QSize
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent, QFont, QColor, QPalette
 
-from src.utils import get_drives, get_drive_label, get_drive_icon, get_user_dirs
+from src.utils import get_drives, get_drive_label, get_user_dirs
 from src import icon_provider as ico
+from src.i18n import t
+from src.logger import get_logger
+from src.toggle_switch import ToggleSwitch
+
+_log = get_logger("sidebar")
 
 
 BOOKMARKS_FILE = str(Path.home() / ".file_explorer_bookmarks.json")
@@ -41,10 +46,12 @@ class _SidebarItem(QPushButton):
         self.path = path
         self.setObjectName("SidebarItem")
         self.setToolTip(path)
+        self.setAccessibleName(label)
+        self.setAccessibleDescription(path)
         self.setCheckable(True)
         self.setAutoExclusive(False)
         self.setFlat(True)
-        self.setMinimumHeight(30)
+        self.setMinimumHeight(32)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
@@ -57,18 +64,26 @@ class _SidebarItem(QPushButton):
         else:
             self.setText(f"{icon_arg}  {label}" if icon_arg else f"  {label}")
 
-        self.setStyleSheet("""
-            QPushButton {
+        accent = ToggleSwitch._C_ON.name()
+        self.setStyleSheet(f"""
+            QPushButton {{
                 text-align: left;
-                padding: 5px 10px 5px 10px;
+                padding: 6px 10px 6px 9px;
                 border: none;
-                border-radius: 5px;
+                border-left: 3px solid transparent;
+                border-radius: 6px;
                 background: transparent;
                 color: #b0b0b0;
                 font-size: 13px;
-            }
-            QPushButton:hover  { background: #2a2d2e; color: white; }
-            QPushButton:checked { background: #094771; color: white; }
+            }}
+            QPushButton:hover  {{ background: rgba(255,255,255,0.06); color: white; }}
+            QPushButton:checked {{
+                background: rgba({QColor(accent).red()},{QColor(accent).green()},{QColor(accent).blue()},0.18);
+                border-left: 3px solid {accent};
+                color: white;
+                font-weight: 600;
+            }}
+            QPushButton:focus  {{ border: 2px solid {accent}; padding: 5px 9px 5px 8px; }}
         """)
 
 
@@ -79,17 +94,17 @@ class _SectionHeader(QWidget):
         super().__init__(parent)
         self._collapsed = False
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 12, 8, 4)
+        layout.setContentsMargins(12, 16, 8, 6)
         layout.setSpacing(4)
 
         lbl = QLabel(title.upper())
-        lbl.setStyleSheet("""
-            QLabel {
-                color: #5a9fd4;
+        lbl.setStyleSheet(f"""
+            QLabel {{
+                color: {ToggleSwitch._C_ON.name()};
                 font-size: 10px;
                 font-weight: 800;
-                letter-spacing: 0.8px;
-            }
+                letter-spacing: 0.9px;
+            }}
         """)
         layout.addWidget(lbl, 1)
 
@@ -98,6 +113,7 @@ class _SectionHeader(QWidget):
             self._arrow.setText("▾")
             self._arrow.setFixedSize(18, 18)
             self._arrow.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._arrow.setToolTip(t("sidebar.collapse_expand"))
             self._arrow.setStyleSheet("""
                 QToolButton { 
                     border: none; 
@@ -124,32 +140,38 @@ class _DriveWidget(QWidget):
         self.drive = drive
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip(drive)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(get_drive_label(drive))
+        self.setAccessibleDescription(drive)
 
         main = QVBoxLayout(self)
-        main.setContentsMargins(14, 8, 14, 8)
-        main.setSpacing(4)
+        main.setContentsMargins(14, 10, 14, 10)
+        main.setSpacing(6)
 
         top = QHBoxLayout()
-        self._icon_lbl = QLabel(get_drive_icon(drive))
-        self._icon_lbl.setStyleSheet("font-size: 18px;")
-        
+        top.setSpacing(10)
+        self._icon_lbl = QLabel()
+        self._icon_lbl.setPixmap(ico.drive_icon("#8a8a8a").pixmap(18, 18))
+        self._icon_lbl.setFixedWidth(18)
+
         name = get_drive_label(drive)
         self._name_lbl = QLabel(name)
-        self._name_lbl.setStyleSheet("color: #ddd; font-size: 13px; font-weight: 500;")
+        self._name_lbl.setStyleSheet("color: #ddd; font-size: 13px; font-weight: 600;")
         self._name_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        
+
         top.addWidget(self._icon_lbl)
         top.addWidget(self._name_lbl, 1)
         main.addLayout(top)
 
         self._bar = QProgressBar()
-        self._bar.setFixedHeight(4)
+        self._bar.setFixedHeight(5)
         self._bar.setTextVisible(False)
         self._bar.setRange(0, 100)
         main.addWidget(self._bar)
 
         self._space_lbl = QLabel("")
-        self._space_lbl.setStyleSheet("color: #777; font-size: 10px;")
+        self._space_lbl.setStyleSheet("color: #808080; font-size: 10px; letter-spacing: 0.2px;")
         main.addWidget(self._space_lbl)
 
         self._refresh_space()
@@ -159,9 +181,10 @@ class _DriveWidget(QWidget):
         timer.timeout.connect(self._refresh_space)
         timer.start(60_000)
 
-        self.setStyleSheet("""
-            QWidget { background: transparent; border-radius: 6px; }
-            QWidget:hover { background: #2a2d2e; }
+        self.setStyleSheet(f"""
+            QWidget {{ background: transparent; border-radius: 6px; }}
+            QWidget:hover {{ background: rgba(255,255,255,0.06); }}
+            QWidget:focus {{ border: 2px solid {ToggleSwitch._C_ON.name()}; }}
         """)
 
     def _refresh_space(self):
@@ -172,7 +195,7 @@ class _DriveWidget(QWidget):
             total = usage.total / (1024**3)
             self._bar.setValue(pct)
             
-            accent = "#0078d4"
+            accent = ToggleSwitch._C_ON.name()
             if pct > 90: accent = "#f44747"
             elif pct > 75: accent = "#d19a66"
             
@@ -180,14 +203,21 @@ class _DriveWidget(QWidget):
                 QProgressBar {{ background: #1e1e1e; border-radius: 2px; border: none; }}
                 QProgressBar::chunk {{ background: {accent}; border-radius: 2px; }}
             """)
-            self._space_lbl.setText(f"{free:.1f} GB libres de {total:.1f} GB")
+            self._space_lbl.setText(t("sidebar.free_of", free=free, total=total))
         except Exception:
+            _log.debug("Failed to read disk usage for %s", self.drive, exc_info=True)
             self._space_lbl.setText("")
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.drive)
         super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.clicked.emit(self.drive)
+            return
+        super().keyPressEvent(event)
 
 
 class Sidebar(QWidget):
@@ -233,7 +263,7 @@ class Sidebar(QWidget):
     # ── Quick access ──────────────────────────────────────
 
     def _build_quick_access(self):
-        hdr = _SectionHeader("Acceso rápido")
+        hdr = _SectionHeader(t("sidebar.quick_access"))
         hdr.toggled_collapsed.connect(lambda c, w=None: self._toggle_section("qa", c))
         self._layout.addWidget(hdr)
 
@@ -262,7 +292,7 @@ class Sidebar(QWidget):
         if not drives:
             return
 
-        hdr = _SectionHeader("Este equipo")
+        hdr = _SectionHeader(t("sidebar.this_pc"))
         hdr.toggled_collapsed.connect(lambda c: self._toggle_section("drives", c))
         self._layout.addWidget(hdr)
 
@@ -284,7 +314,7 @@ class Sidebar(QWidget):
     # ── Bookmarks ─────────────────────────────────────────
 
     def _build_bookmarks_section(self):
-        self._bm_header = _SectionHeader("Marcadores")
+        self._bm_header = _SectionHeader(t("sidebar.bookmarks"))
         self._bm_header.toggled_collapsed.connect(lambda c: self._toggle_section("bm", c))
         self._layout.addWidget(self._bm_header)
 
@@ -315,7 +345,7 @@ class Sidebar(QWidget):
             self._bm_layout.addWidget(btn)
 
         if not self._bookmarks:
-            hint = QLabel("  Arrastra carpetas aquí")
+            hint = QLabel(t("sidebar.drag_hint"))
             hint.setStyleSheet("color: #444; font-size: 11px; padding: 6px 14px;")
             self._bm_layout.addWidget(hint)
 
@@ -323,7 +353,7 @@ class Sidebar(QWidget):
         from PyQt6.QtWidgets import QMenu
         from PyQt6.QtGui import QAction
         menu = QMenu(self)
-        remove_act = QAction("Quitar marcador", self)
+        remove_act = QAction(t("sidebar.remove_bookmark"), self)
         remove_act.triggered.connect(lambda: self.remove_bookmark(path))
         menu.addAction(remove_act)
         menu.exec(self.cursor().pos())
@@ -353,7 +383,7 @@ class Sidebar(QWidget):
     # ── Recent files ──────────────────────────────────────
 
     def _build_recent_files_section(self):
-        self._rf_header = _SectionHeader("Recientes")
+        self._rf_header = _SectionHeader(t("sidebar.recent"))
         self._rf_header.toggled_collapsed.connect(lambda c: self._toggle_section("rf", c))
         self._layout.addWidget(self._rf_header)
 
@@ -376,10 +406,11 @@ class Sidebar(QWidget):
             from src.recent_files import load_recent_files
             files = load_recent_files()[:10]
         except Exception:
+            _log.exception("Failed to load recent files")
             files = []
 
         if not files:
-            hint = QLabel("  Sin archivos recientes")
+            hint = QLabel(t("sidebar.no_recent"))
             hint.setStyleSheet("color: #444; font-size: 11px; padding: 6px 14px;")
             self._rf_layout.addWidget(hint)
             return

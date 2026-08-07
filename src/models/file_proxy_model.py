@@ -2,6 +2,9 @@ from PyQt6.QtCore import Qt, QSortFilterProxyModel, QModelIndex
 from PyQt6.QtGui import QColor, QFileSystemModel
 from src.thumbnail_cache import ThumbnailCache
 from src.utils import format_date_relative
+from src.logger import get_logger
+
+_log = get_logger("file_proxy_model")
 
 _FILE_TYPE_COLORS: dict[str, str] = {
     # Images
@@ -100,84 +103,101 @@ class FileProxyModel(QSortFilterProxyModel):
         self.invalidateFilter()
 
     def filterAcceptsRow(self, source_row: int, source_parent: QModelIndex) -> bool:
-        model = self.sourceModel()
-        if not isinstance(model, QFileSystemModel):
-            return True
-        idx  = model.index(source_row, 0, source_parent)
-        name = model.fileName(idx)
+        # Virtual override called from C++ on every repaint/resort — a stray
+        # exception here (e.g. a file that vanished mid-copy/mid-refresh)
+        # can't be marshalled back to a bool and crashes the whole process
+        # with an opaque "sipBadCatcherResult" error instead of a traceback,
+        # so we log and accept the row rather than let that happen.
+        try:
+            model = self.sourceModel()
+            if not isinstance(model, QFileSystemModel):
+                return True
+            idx  = model.index(source_row, 0, source_parent)
+            name = model.fileName(idx)
 
-        # Text filter
-        if self._filter:
-            match = (self._filter in name) if self._search_case else (self._filter.lower() in name.lower())
-            if not match:
-                return False
-
-        # Type filter (skip dirs)
-        if self._type_filter and self._type_filter != "all":
-            if not model.isDir(idx):
-                exts = self._TYPE_EXTS.get(self._type_filter, set())
-                from pathlib import Path as _P
-                if _P(name).suffix.lower() not in exts:
+            # Text filter
+            if self._filter:
+                match = (self._filter in name) if self._search_case else (self._filter.lower() in name.lower())
+                if not match:
                     return False
 
-        return True
+            # Type filter (skip dirs)
+            if self._type_filter and self._type_filter != "all":
+                if not model.isDir(idx):
+                    exts = self._TYPE_EXTS.get(self._type_filter, set())
+                    from pathlib import Path as _P
+                    if _P(name).suffix.lower() not in exts:
+                        return False
+
+            return True
+        except Exception:
+            _log.exception("filterAcceptsRow failed for row %s", source_row)
+            return True
 
     # ── Sort: folders first ───────────────────────────────
 
     def lessThan(self, left: QModelIndex, right: QModelIndex) -> bool:
-        if self._folders_first:
-            model = self.sourceModel()
-            if isinstance(model, QFileSystemModel):
-                l_dir = model.isDir(left)
-                r_dir = model.isDir(right)
-                if l_dir != r_dir:
-                    return l_dir  # dirs sort before files
-        return super().lessThan(left, right)
+        try:
+            if self._folders_first:
+                model = self.sourceModel()
+                if isinstance(model, QFileSystemModel):
+                    l_dir = model.isDir(left)
+                    r_dir = model.isDir(right)
+                    if l_dir != r_dir:
+                        return l_dir  # dirs sort before files
+            return super().lessThan(left, right)
+        except Exception:
+            _log.exception("lessThan failed")
+            return False
 
     # ── Data: thumbnail + hide extensions + color coding ──
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole):
-        if role == Qt.ItemDataRole.DecorationRole and self._thumbnail_on:
-            src_idx = self.mapToSource(index)
-            model   = self.sourceModel()
-            if isinstance(model, QFileSystemModel):
-                path = model.filePath(src_idx)
-                if ThumbnailCache.is_image(path):
-                    icon = self._cache.get(path)
-                    if icon:
-                        return icon
+        try:
+            if role == Qt.ItemDataRole.DecorationRole and self._thumbnail_on:
+                src_idx = self.mapToSource(index)
+                model   = self.sourceModel()
+                if isinstance(model, QFileSystemModel):
+                    path = model.filePath(src_idx)
+                    if ThumbnailCache.is_image(path):
+                        icon = self._cache.get(path)
+                        if icon:
+                            return icon
 
-        if role == Qt.ItemDataRole.DisplayRole and index.column() == 3 and self._date_relative:
-            src_idx = self.mapToSource(index)
-            model   = self.sourceModel()
-            if isinstance(model, QFileSystemModel):
-                fi = model.fileInfo(src_idx)
-                ts = fi.lastModified().toSecsSinceEpoch()
-                if ts > 0:
-                    return format_date_relative(ts)
+            if role == Qt.ItemDataRole.DisplayRole and index.column() == 3 and self._date_relative:
+                src_idx = self.mapToSource(index)
+                model   = self.sourceModel()
+                if isinstance(model, QFileSystemModel):
+                    fi = model.fileInfo(src_idx)
+                    ts = fi.lastModified().toSecsSinceEpoch()
+                    if ts > 0:
+                        return format_date_relative(ts)
 
-        if role == Qt.ItemDataRole.DisplayRole and index.column() == 0:
-            if not self._show_extensions:
+            if role == Qt.ItemDataRole.DisplayRole and index.column() == 0:
+                if not self._show_extensions:
+                    src_idx = self.mapToSource(index)
+                    model   = self.sourceModel()
+                    if isinstance(model, QFileSystemModel) and not model.isDir(src_idx):
+                        name = model.fileName(src_idx)
+                        from pathlib import Path as _P
+                        stem = _P(name).stem
+                        if stem:  # keep ".gitignore" as-is
+                            return stem
+
+            if role == Qt.ItemDataRole.ForegroundRole and self._color_coding:
                 src_idx = self.mapToSource(index)
                 model   = self.sourceModel()
                 if isinstance(model, QFileSystemModel) and not model.isDir(src_idx):
-                    name = model.fileName(src_idx)
+                    path = model.filePath(src_idx)
                     from pathlib import Path as _P
-                    stem = _P(name).stem
-                    if stem:  # keep ".gitignore" as-is
-                        return stem
+                    color = _FILE_TYPE_COLORS.get(_P(path).suffix.lower())
+                    if color:
+                        return QColor(color)
 
-        if role == Qt.ItemDataRole.ForegroundRole and self._color_coding:
-            src_idx = self.mapToSource(index)
-            model   = self.sourceModel()
-            if isinstance(model, QFileSystemModel) and not model.isDir(src_idx):
-                path = model.filePath(src_idx)
-                from pathlib import Path as _P
-                color = _FILE_TYPE_COLORS.get(_P(path).suffix.lower())
-                if color:
-                    return QColor(color)
-
-        return super().data(index, role)
+            return super().data(index, role)
+        except Exception:
+            _log.exception("data() failed for role %s", role)
+            return None
 
     def _on_thumbnail_ready(self, path: str):
         model = self.sourceModel()

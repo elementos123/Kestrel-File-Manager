@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QSplitter, QTabWidget, QTabBar, QToolBar, QStatusBar,
     QLineEdit, QLabel, QMenu, QApplication, QMessageBox,
-    QPushButton, QFrame, QSizePolicy, QToolButton, QCompleter,
+    QPushButton, QSizePolicy, QToolButton, QCompleter,
     QComboBox,
 )
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, QTimer, QSettings, QStringListModel
@@ -27,6 +27,10 @@ from src.widgets.address_bar import AddressBar
 from src.widgets.terminal_panel import TerminalPanel
 from src.widgets.transfer_manager import TransferManager
 from src.widgets.spotlight import SpotlightBar
+from src.i18n import t
+from src.logger import get_logger
+
+_log = get_logger("main_window")
 
 
 # ── Main window ───────────────────────────────────────────
@@ -35,15 +39,14 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self._settings = load_settings()
-        self._active_workers = []
         self._preview_visible  = self._settings.get("preview",      True)
         self._sidebar_visible  = self._settings.get("show_sidebar", True)
         self._dual_mode        = self._settings.get("dual_mode",    False)
         self._terminal_visible = self._settings.get("show_terminal", False)
 
-        self.setWindowTitle("Explorador de Archivos")
+        self.setWindowTitle(t("app.title"))
         self.resize(1280, 780)
-        self.setMinimumSize(860, 560)
+        self.setMinimumSize(700, 480)
 
         self._apply_theme(
             self._settings.get("theme",            "dark_fluent"),
@@ -76,6 +79,17 @@ class MainWindow(QMainWindow):
             if self._dual_mode:
                 self._add_tab(start_path, target_side="right")
 
+        # Re-run now that a panel exists, to chain sidebar -> file view.
+        self._wire_tab_order()
+
+        if not self._settings.get("onboarding_shown"):
+            QTimer.singleShot(0, self._show_first_run_welcome)
+
+    def _show_first_run_welcome(self):
+        self._settings["onboarding_shown"] = True
+        save_settings(self._settings)
+        self._show_welcome_tour()
+
     # ── UI ────────────────────────────────────────────────
 
     def _build_ui(self):
@@ -96,24 +110,36 @@ class MainWindow(QMainWindow):
         root_h.setContentsMargins(0, 0, 0, 0)
         root_h.setSpacing(0)
 
+        # Sidebar lives in a real splitter (drag-resizable, adapts to window
+        # width) instead of a fixed-pixel-width layout slot.
+        self._upper_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self._upper_splitter.setHandleWidth(4)
+        self._upper_splitter.setStyleSheet(
+            "QSplitter::handle { background: #2a2a2a; }"
+            "QSplitter::handle:hover { background: #3f3f3f; }"
+        )
+        root_h.addWidget(self._upper_splitter)
+
         self._sidebar = Sidebar()
         self._sidebar.navigate.connect(self._sidebar_navigate)
         self._sidebar.setVisible(self._sidebar_visible)
-        self._sidebar.setFixedWidth(self._settings.get("sidebar_width", 200))
-        root_h.addWidget(self._sidebar)
-
-        self._sidebar_sep = QFrame()
-        self._sidebar_sep.setFrameShape(QFrame.Shape.VLine)
-        self._sidebar_sep.setFixedWidth(1)
-        self._sidebar_sep.setStyleSheet("border: none; background: #2a2a2a;")
-        self._sidebar_sep.setVisible(self._sidebar_visible)
-        root_h.addWidget(self._sidebar_sep)
+        self._sidebar.setMinimumWidth(160)
+        self._sidebar.setMaximumWidth(420)
+        self._upper_splitter.addWidget(self._sidebar)
 
         # Tab Splitter for Dual Panel
         self._tab_splitter = QSplitter(Qt.Orientation.Horizontal)
         self._tab_splitter.setHandleWidth(1)
         self._tab_splitter.setStyleSheet("QSplitter::handle { background: #2a2a2a; }")
-        root_h.addWidget(self._tab_splitter)
+        self._upper_splitter.addWidget(self._tab_splitter)
+
+        self._upper_splitter.setStretchFactor(0, 0)
+        self._upper_splitter.setStretchFactor(1, 1)
+        self._upper_splitter.setCollapsible(0, True)
+        self._upper_splitter.setCollapsible(1, False)
+        sidebar_w = self._settings.get("sidebar_width", 200)
+        self._upper_splitter.setSizes([sidebar_w, max(400, 1000 - sidebar_w)])
+        self._upper_splitter.splitterMoved.connect(self._on_sidebar_splitter_moved)
 
         self._left_tabs = TabWidget()
         self._setup_tabs(self._left_tabs)
@@ -125,12 +151,17 @@ class MainWindow(QMainWindow):
         self._right_tabs.setVisible(self._dual_mode)
 
         self._active_tabs = self._left_tabs
-        
-        # Transfer Manager (right sidebar)
-        self._transfer_mgr = TransferManager()
+
+        # Transfer Manager — a floating panel (not part of the layout) so it
+        # can be shown/hidden without squeezing the file view, anchored to
+        # the bottom-right corner of the window and kept there on resize.
+        self._transfer_mgr = TransferManager(self)
         self._transfer_mgr.setVisible(False)
-        root_h.addWidget(self._transfer_mgr)
-        
+        self._transfer_mgr.count_changed.connect(self._on_transfer_count_changed)
+
+        # Auto-collapse state for narrow windows (see resizeEvent)
+        self._sidebar_auto_collapsed = False
+
         self._v_splitter.addWidget(self._upper_container)
 
         # Terminal Panel
@@ -143,7 +174,15 @@ class MainWindow(QMainWindow):
         self._build_toolbar()
         self._build_statusbar()
         self._update_statusbar_items()
-        
+        self._wire_tab_order()
+
+        # Track which dual-mode panel is "active" from real keyboard focus,
+        # not just clicks on the tab bar (see _on_focus_changed) — clicking
+        # inside a panel's file view, breadcrumb, etc. never reaches the
+        # tabBar()-only eventFilter below, so relying on that alone left
+        # _active_tabs stuck on the left panel for most normal interaction.
+        QApplication.instance().focusChanged.connect(self._on_focus_changed)
+
         # Spotlight Bar (global command/search)
         self._spotlight = SpotlightBar(self)
         self._spotlight.hide()
@@ -167,6 +206,8 @@ class MainWindow(QMainWindow):
                 self._toggle_terminal()
             elif value == "settings":
                 self._open_settings()
+            elif value == "show_shortcuts":
+                self._show_shortcuts()
         elif cmd_type == "path":
             if os.path.isdir(value):
                 self._navigate_to(value)
@@ -200,18 +241,22 @@ class MainWindow(QMainWindow):
         def _act(icon_fn, tip: str, shortcut: str = "") -> QAction:
             a = QAction(self)
             a.setIcon(icon_fn())
+            # setText() doesn't show a visible label (toolbar is icon-only), but it's
+            # what screen readers report as the button's accessible name — without it,
+            # icon-only actions are silent to assistive tech.
+            a.setText(tip)
             a.setToolTip(f"{tip}  {shortcut}" if shortcut else tip)
             if shortcut:
                 a.setShortcut(shortcut)
             tb.addAction(a)
             return a
 
-        self._act_back    = _act(ico.nav_back,  "Atrás",      "Alt+Left")
-        self._act_forward = _act(ico.nav_fwd,   "Adelante",   "Alt+Right")
-        self._act_up      = _act(ico.nav_up,    "Subir",      "Alt+Up")
-        self._act_home    = _act(ico.nav_home,  "Inicio")
+        self._act_back    = _act(ico.nav_back,  t("tb.back"),      "Alt+Left")
+        self._act_forward = _act(ico.nav_fwd,   t("tb.forward"),   "Alt+Right")
+        self._act_up      = _act(ico.nav_up,    t("tb.up"),        "Alt+Up")
+        self._act_home    = _act(ico.nav_home,  t("tb.home"))
         tb.addSeparator()
-        self._act_refresh = _act(ico.refresh,   "Actualizar", "F5")
+        self._act_refresh = _act(ico.refresh,   t("tb.refresh"),   "F5")
         tb.addSeparator()
 
         self._act_back.triggered.connect(self._go_back)
@@ -227,13 +272,14 @@ class MainWindow(QMainWindow):
         addr_layout.setSpacing(2)
 
         self._address_bar = AddressBar()
-        self._address_bar.setMinimumWidth(240)
+        self._address_bar.setMinimumWidth(160)
         self._address_bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._address_bar.navigate_requested.connect(self._on_address_entered)
 
         self._hist_btn = QToolButton()
         self._hist_btn.setText("▾")
-        self._hist_btn.setToolTip("Historial reciente")
+        self._hist_btn.setToolTip(t("tb.recent_history"))
+        self._hist_btn.setAccessibleName(t("tb.recent_history"))
         self._hist_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._hist_btn.setStyleSheet(
             "QToolButton { background: transparent; border: 1px solid #444;"
@@ -254,24 +300,29 @@ class MainWindow(QMainWindow):
         search_layout.setSpacing(2)
 
         self._search_bar = QLineEdit()
-        self._search_bar.setPlaceholderText("🔍  Buscar…")
-        self._search_bar.setMinimumWidth(160)
-        self._search_bar.setMaximumWidth(280)
+        self._search_bar.setPlaceholderText(t("tb.search_placeholder"))
+        self._search_bar.setMinimumWidth(100)
+        self._search_bar.setMaximumWidth(260)
+        self._search_bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._search_bar.setClearButtonEnabled(True)
-        self._search_bar.setToolTip("Buscar en carpeta actual  Ctrl+F")
+        self._search_bar.setToolTip(t("tb.search_current"))
         self._search_bar.textChanged.connect(self._on_search)
 
         self._recursive_btn = QToolButton()
         self._recursive_btn.setIcon(ico.search_recursive())
         self._recursive_btn.setIconSize(QSize(16, 16))
-        self._recursive_btn.setToolTip("Buscar en subcarpetas  Ctrl+Shift+F")
+        self._recursive_btn.setToolTip(t("tb.search_recursive"))
+        self._recursive_btn.setAccessibleName(t("tb.search_recursive"))
         self._recursive_btn.setCheckable(True)
         self._recursive_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        from src.toggle_switch import ToggleSwitch as _TSAccent
+        _racc = _TSAccent._C_ON
         self._recursive_btn.setStyleSheet(
             "QToolButton { background: transparent; border: 1px solid #444;"
-            "border-radius: 4px; padding: 4px 6px; }"
+            "border-radius: 5px; padding: 5px 7px; }"
             "QToolButton:hover { background: #333; }"
-            "QToolButton:checked { background: #094771; border-color: #1a7bc4; }"
+            f"QToolButton:checked {{ background: rgba({_racc.red()},{_racc.green()},{_racc.blue()},0.22);"
+            f" border-color: {_racc.name()}; }}"
         )
         self._recursive_btn.toggled.connect(self._toggle_recursive_search)
 
@@ -282,23 +333,28 @@ class MainWindow(QMainWindow):
 
         # File type filter
         self._type_filter_combo = QComboBox()
-        self._type_filter_combo.addItem("Todos",      "all")
-        self._type_filter_combo.addItem("🖼 Imágenes", "images")
-        self._type_filter_combo.addItem("🎬 Vídeo",   "video")
-        self._type_filter_combo.addItem("🎵 Audio",   "audio")
-        self._type_filter_combo.addItem("📄 Docs",    "docs")
-        self._type_filter_combo.addItem("💻 Código",  "code")
-        self._type_filter_combo.addItem("🗜 Archivos","archives")
-        self._type_filter_combo.setFixedWidth(130)
-        self._type_filter_combo.setToolTip("Filtrar por tipo de archivo")
+        self._type_filter_combo.addItem(ico.type_all(),     t("tb.filter.all"),      "all")
+        self._type_filter_combo.addItem(ico.type_image(),   t("tb.filter.images"),   "images")
+        self._type_filter_combo.addItem(ico.type_video(),   t("tb.filter.video"),    "video")
+        self._type_filter_combo.addItem(ico.type_audio(),   t("tb.filter.audio"),    "audio")
+        self._type_filter_combo.addItem(ico.type_docs(),    t("tb.filter.docs"),     "docs")
+        self._type_filter_combo.addItem(ico.type_code(),    t("tb.filter.code"),     "code")
+        self._type_filter_combo.addItem(ico.type_archive(), t("tb.filter.archives"), "archives")
+        self._type_filter_combo.setIconSize(QSize(15, 15))
+        self._type_filter_combo.setMinimumWidth(60)
+        self._type_filter_combo.setMaximumWidth(130)
+        self._type_filter_combo.setToolTip(t("tb.filter_type"))
         self._type_filter_combo.currentIndexChanged.connect(self._on_type_filter_changed)
-        tb.addWidget(self._type_filter_combo)
+        # Toolbar-embedded widgets are hidden/shown via the QAction that wraps
+        # them (returned by addWidget), not the widget itself — the widget's
+        # own setVisible() doesn't reliably collapse its toolbar slot.
+        self._act_type_filter = tb.addWidget(self._type_filter_combo)
         tb.addSeparator()
 
         # View mode buttons
-        self._act_vd = _act(ico.view_details, "Vista detalles", "Ctrl+1")
-        self._act_vi = _act(ico.view_icons,   "Vista iconos",   "Ctrl+2")
-        self._act_vl = _act(ico.view_list,    "Vista lista",    "Ctrl+3")
+        self._act_vd = _act(ico.view_details, t("tb.view_details"), "Ctrl+1")
+        self._act_vi = _act(ico.view_icons,   t("tb.view_icons"),   "Ctrl+2")
+        self._act_vl = _act(ico.view_list,    t("tb.view_list"),    "Ctrl+3")
         for a in (self._act_vd, self._act_vi, self._act_vl):
             a.setCheckable(True)
         self._act_vd.setChecked(True)
@@ -308,32 +364,56 @@ class MainWindow(QMainWindow):
         tb.addSeparator()
 
         # Dual Panel Toggle
-        self._act_dual = _act(ico.view_dual if hasattr(ico, "view_dual") else ico.view_list, 
-                              "Vista panel dual  Ctrl+L", "Ctrl+L")
+        self._act_dual = _act(ico.view_dual if hasattr(ico, "view_dual") else ico.view_list,
+                              t("tb.dual_panel"), "Ctrl+L")
         self._act_dual.setCheckable(True)
         self._act_dual.setChecked(self._dual_mode)
         self._act_dual.triggered.connect(self._toggle_dual_mode)
         tb.addSeparator()
 
         # Terminal Toggle
-        self._act_term = _act(ico.terminal_icon, "Terminal  Ctrl+`", "Ctrl+`" if sys.platform != "win32" else "Ctrl+Ñ")
+        self._act_term = _act(ico.terminal_icon, t("tb.terminal"), "Ctrl+`" if sys.platform != "win32" else "Ctrl+Ñ")
         self._act_term.setCheckable(True)
         self._act_term.setChecked(self._terminal_visible)
         self._act_term.triggered.connect(self._toggle_terminal)
         tb.addSeparator()
 
         # Preview
-        self._act_preview = _act(ico.preview_icon, "Vista previa  Ctrl+P", "Ctrl+P")
+        self._act_preview = _act(ico.preview_icon, t("tb.preview"), "Ctrl+P")
         self._act_preview.setCheckable(True)
         self._act_preview.setChecked(self._preview_visible)
         self._act_preview.triggered.connect(self._toggle_preview)
         tb.addSeparator()
 
         # New folder
-        self._act_nf = _act(ico.folder_plus, "Nueva carpeta  Ctrl+Shift+N", "Ctrl+Shift+N")
+        self._act_nf = _act(ico.folder_plus, t("tb.new_folder"), "Ctrl+Shift+N")
         self._act_nf.triggered.connect(self._new_folder)
-        self._act_bookmark = _act(ico.star_icon, "Añadir carpeta actual a marcadores", "Ctrl+D")
+        self._act_bookmark = _act(ico.star_icon, t("tb.bookmark_current"), "Ctrl+D")
         self._act_bookmark.triggered.connect(self._bookmark_current_folder)
+        tb.addSeparator()
+
+        # Transfers toggle — a small badge shows the active-transfer count.
+        self._transfers_btn = QToolButton()
+        self._transfers_btn.setIcon(ico.transfer_tray_icon())
+        self._transfers_btn.setIconSize(QSize(20, 20))
+        self._transfers_btn.setToolTip(t("tb.transfers"))
+        self._transfers_btn.setAccessibleName(t("tb.transfers"))
+        self._transfers_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._transfers_btn.clicked.connect(self._toggle_transfer_mgr)
+        # Toolbar-embedded widgets must be hidden/shown via the QAction that
+        # wraps them (see _act_type_filter above) — the widget's own
+        # setVisible() doesn't reliably collapse its toolbar slot.
+        self._act_transfers = tb.addWidget(self._transfers_btn)
+        self._act_transfers.setVisible(False)  # only appears once there's something to show
+
+        self._transfers_badge = QLabel(self._transfers_btn)
+        self._transfers_badge.setStyleSheet(
+            "background: #e06c75; color: white; font-size: 9px; font-weight: 700; "
+            "border-radius: 7px; padding: 0px;"
+        )
+        self._transfers_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._transfers_badge.setFixedSize(14, 14)
+        self._transfers_badge.hide()
         tb.addSeparator()
 
         # Theme quick toggle
@@ -342,96 +422,112 @@ class MainWindow(QMainWindow):
         self._act_theme_toggle.setIcon(
             ico.theme_light() if cur_theme == "light_fluent" else ico.theme_dark()
         )
-        self._act_theme_toggle.setToolTip("Cambiar tema claro/oscuro  Ctrl+Shift+T")
+        self._act_theme_toggle.setText(t("tb.theme_toggle"))
+        self._act_theme_toggle.setToolTip(t("tb.theme_toggle"))
         self._act_theme_toggle.setShortcut("Ctrl+Shift+T")
         self._act_theme_toggle.triggered.connect(self._toggle_theme)
         tb.addAction(self._act_theme_toggle)
         tb.addSeparator()
 
         # Settings
-        self._act_cfg = _act(ico.settings_icon, "Configuración")
+        self._act_cfg = _act(ico.settings_icon, t("tb.settings"))
         self._act_cfg.triggered.connect(self._open_settings)
 
         # Update buttons state
         self._update_nav_buttons()
 
+    def _wire_tab_order(self):
+        """Keyboard Tab order should follow the visual top-to-bottom, left-to-right
+        flow (address bar -> toolbar -> sidebar -> file panel), not widget-creation
+        order (which builds the toolbar last, after sidebar/tabs/terminal)."""
+        self.setTabOrder(self._address_bar, self._hist_btn)
+        self.setTabOrder(self._hist_btn, self._search_bar)
+        self.setTabOrder(self._search_bar, self._recursive_btn)
+        self.setTabOrder(self._recursive_btn, self._type_filter_combo)
+        if self._sidebar._buttons:
+            self.setTabOrder(self._type_filter_combo, self._sidebar._buttons[0])
+            panel = self._panel()
+            if panel is not None:
+                self.setTabOrder(self._sidebar._buttons[-1], panel._active_view())
+
     def _build_menu(self):
         mb = self.menuBar()
 
         # ── Archivo
-        fm = mb.addMenu("Archivo")
-        fm.addAction(QAction("Nueva ventana\tCtrl+N",  self, triggered=self._new_window))
+        fm = mb.addMenu(t("menu.file"))
+        fm.addAction(QAction(t("menu.file.new_window"),  self, triggered=self._new_window))
         fm.addSeparator()
-        fm.addAction(QAction("Nueva pestaña\tCtrl+T",  self, triggered=self._new_tab_from_current))
-        fm.addAction(QAction("Cerrar pestaña\tCtrl+W", self, triggered=self._close_current_tab))
+        fm.addAction(QAction(t("menu.file.new_tab"),  self, triggered=self._new_tab_from_current))
+        fm.addAction(QAction(t("menu.file.close_tab"), self, triggered=self._close_current_tab))
         fm.addSeparator()
-        fm.addAction(QAction("Nueva carpeta\tCtrl+Shift+N", self, triggered=self._new_folder))
+        fm.addAction(QAction(t("menu.file.new_folder"), self, triggered=self._new_folder))
         fm.addSeparator()
-        rc_menu = fm.addMenu("Carpetas recientes")
+        rc_menu = fm.addMenu(t("menu.file.recent_folders"))
         rc_menu.aboutToShow.connect(lambda: self._populate_recent_menu(rc_menu))
         fm.addSeparator()
-        fm.addAction(QAction("Salir\tAlt+F4", self, triggered=self.close))
+        fm.addAction(QAction(t("menu.file.exit"), self, triggered=self.close))
 
         # ── Editar
-        em = mb.addMenu("Editar")
-        em.addAction(QAction("Copiar\tCtrl+C",  self,
+        em = mb.addMenu(t("menu.edit"))
+        em.addAction(QAction(t("menu.edit.copy"),  self,
             triggered=lambda: self._panel() and self._panel()._copy_selected(False)))
-        em.addAction(QAction("Cortar\tCtrl+X",  self,
+        em.addAction(QAction(t("menu.edit.cut"),  self,
             triggered=lambda: self._panel() and self._panel()._copy_selected(True)))
-        em.addAction(QAction("Pegar\tCtrl+V",   self, triggered=self._paste_current))
+        em.addAction(QAction(t("menu.edit.paste"),   self, triggered=self._paste_current))
         em.addSeparator()
-        em.addAction(QAction("Seleccionar todo\tCtrl+A", self,
+        em.addAction(QAction(t("menu.edit.select_all"), self,
             triggered=lambda: self._panel() and self._panel()._active_view().selectAll()))
         em.addSeparator()
-        em.addAction(QAction("Renombrar\tF2",              self, triggered=self._rename_selected))
-        em.addAction(QAction("Renombrar múltiples…\tCtrl+R", self, triggered=self._multi_rename_selected))
-        em.addAction(QAction("Eliminar\tSupr",  self, triggered=self._delete_selected))
+        em.addAction(QAction(t("menu.edit.rename"),              self, triggered=self._rename_selected))
+        em.addAction(QAction(t("menu.edit.multi_rename"), self, triggered=self._multi_rename_selected))
+        em.addAction(QAction(t("menu.edit.delete"),  self, triggered=self._delete_selected))
         em.addSeparator()
-        em.addAction(QAction("Copiar ruta\tCtrl+Shift+C", self,
+        em.addAction(QAction(t("menu.edit.copy_path"), self,
             triggered=self._copy_path))
 
         # ── Ver
-        vm = mb.addMenu("Ver")
-        vm.addAction(QAction("Vista detalles\tCtrl+1", self, triggered=lambda: self._set_view(VIEW_DETAILS)))
-        vm.addAction(QAction("Vista iconos\tCtrl+2",   self, triggered=lambda: self._set_view(VIEW_ICONS)))
-        vm.addAction(QAction("Vista lista\tCtrl+3",    self, triggered=lambda: self._set_view(VIEW_LIST)))
+        vm = mb.addMenu(t("menu.view"))
+        vm.addAction(QAction(t("menu.view.details"), self, triggered=lambda: self._set_view(VIEW_DETAILS)))
+        vm.addAction(QAction(t("menu.view.icons"),   self, triggered=lambda: self._set_view(VIEW_ICONS)))
+        vm.addAction(QAction(t("menu.view.list"),    self, triggered=lambda: self._set_view(VIEW_LIST)))
         vm.addSeparator()
-        vm.addAction(QAction("Vista panel dual\tCtrl+L", self, triggered=self._toggle_dual_mode))
-        vm.addAction(QAction("Terminal integrada\tCtrl+`", self, triggered=self._toggle_terminal))
-        vm.addAction(QAction("Vista previa\tCtrl+P",     self, triggered=self._toggle_preview))
-        vm.addAction(QAction("Barra lateral\tCtrl+B",    self, triggered=self._toggle_sidebar))
+        vm.addAction(QAction(t("menu.view.dual"), self, triggered=self._toggle_dual_mode))
+        vm.addAction(QAction(t("menu.view.terminal"), self, triggered=self._toggle_terminal))
+        vm.addAction(QAction(t("menu.view.preview"),     self, triggered=self._toggle_preview))
+        vm.addAction(QAction(t("menu.view.sidebar"),    self, triggered=self._toggle_sidebar))
         vm.addSeparator()
-        vm.addAction(QAction("Actualizar\tF5",           self, triggered=self._refresh))
+        vm.addAction(QAction(t("menu.view.refresh"),           self, triggered=self._refresh))
 
         # ── Navegar
-        nm = mb.addMenu("Navegar")
-        nm.addAction(QAction("Atrás\tAlt+←",    self, triggered=self._go_back))
-        nm.addAction(QAction("Adelante\tAlt+→",  self, triggered=self._go_forward))
-        nm.addAction(QAction("Subir\tAlt+↑",     self, triggered=self._go_up))
+        nm = mb.addMenu(t("menu.navigate"))
+        nm.addAction(QAction(t("menu.navigate.back"),    self, triggered=self._go_back))
+        nm.addAction(QAction(t("menu.navigate.forward"),  self, triggered=self._go_forward))
+        nm.addAction(QAction(t("menu.navigate.up"),     self, triggered=self._go_up))
         nm.addSeparator()
         for lbl, path in get_user_dirs().items():
             nm.addAction(QAction(lbl, self,
                 triggered=lambda _, p=path: self._navigate_to(p)))
         nm.addSeparator()
-        nm.addAction(QAction("Añadir carpeta actual a marcadores\tCtrl+D", self,
+        nm.addAction(QAction(t("menu.navigate.bookmark"), self,
             triggered=self._bookmark_current_folder))
 
         # ── Herramientas
-        tm = mb.addMenu("Herramientas")
-        tm.addAction(QAction("Configuración",        self, triggered=self._open_settings))
+        tm = mb.addMenu(t("menu.tools"))
+        tm.addAction(QAction(t("menu.tools.settings"),        self, triggered=self._open_settings))
         tm.addSeparator()
-        tm.addAction(QAction("Limpiar historial reciente", self, triggered=self._clear_history))
+        tm.addAction(QAction(t("menu.tools.clear_history"), self, triggered=self._clear_history))
 
         # ── Ayuda
-        hm = mb.addMenu("Ayuda")
-        hm.addAction(QAction("Atajos de teclado", self, triggered=self._show_shortcuts))
-        hm.addAction(QAction("Acerca de",         self, triggered=self._show_about))
+        hm = mb.addMenu(t("menu.help"))
+        hm.addAction(QAction(t("menu.help.welcome_tour"), self, triggered=self._show_welcome_tour))
+        hm.addAction(QAction(t("menu.help.shortcuts"), self, triggered=self._show_shortcuts))
+        hm.addAction(QAction(t("menu.help.about"),         self, triggered=self._show_about))
 
     def _build_statusbar(self):
         self._statusbar = QStatusBar()
         self.setStatusBar(self._statusbar)
 
-        self._status_left  = QLabel("Listo")
+        self._status_left  = QLabel(t("status.ready"))
         self._status_path  = QLabel("")
         self._status_disk  = QLabel("")
         self._status_theme = QLabel("")
@@ -449,10 +545,10 @@ class MainWindow(QMainWindow):
 
         # Make path clickable to copy
         self._status_path.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._status_path.setToolTip("Click para copiar ruta")
+        self._status_path.setToolTip(t("tb.copy_path_click"))
         self._status_path.mousePressEvent = lambda _: (
             QApplication.clipboard().setText(self._status_path.text()),
-            self._on_status("Ruta copiada")
+            self._on_status(t("status.path_copied"))
         )
 
         self._statusbar.addWidget(self._status_left, 1)
@@ -515,6 +611,9 @@ class MainWindow(QMainWindow):
         panel.title_changed.connect(
             lambda title, p=panel, t=tabs: self._update_tab_title(t, p, title)
         )
+        # Register every paste (menu, toolbar, in-panel shortcut, drag & drop)
+        # with the transfer panel, regardless of which code path started it.
+        panel.paste_started.connect(self._transfer_mgr.add_transfer)
         
         name = os.path.basename(path) or path
         idx  = tabs.addTab(panel, f"📁  {name}")
@@ -560,13 +659,31 @@ class MainWindow(QMainWindow):
             self._type_filter_combo.blockSignals(False)
 
     def eventFilter(self, obj, event):
-        from PyQt6.QtCore import QEvent
-        if event.type() == QEvent.Type.MouseButtonPress or event.type() == QEvent.Type.FocusIn:
-            if obj is self._left_tabs.tabBar() or self._left_tabs.isAncestorOf(obj):
-                self._set_active_panel(self._left_tabs)
-            elif obj is self._right_tabs.tabBar() or self._right_tabs.isAncestorOf(obj):
-                self._set_active_panel(self._right_tabs)
+        # This is a Qt virtual override — it MUST return a bool. If anything
+        # inside raises, PyQt can't hand C++ a return value and the whole
+        # process dies with an opaque "sipBadCatcherResult" TypeError instead
+        # of the real traceback, so any exception here is caught and logged.
+        try:
+            from PyQt6.QtCore import QEvent
+            if event.type() == QEvent.Type.MouseButtonPress or event.type() == QEvent.Type.FocusIn:
+                if obj is self._left_tabs.tabBar() or self._left_tabs.isAncestorOf(obj):
+                    self._set_active_panel(self._left_tabs)
+                elif obj is self._right_tabs.tabBar() or self._right_tabs.isAncestorOf(obj):
+                    self._set_active_panel(self._right_tabs)
+        except Exception:
+            _log.exception("eventFilter failed for obj=%r event=%r", obj, event.type())
         return super().eventFilter(obj, event)
+
+    def _on_focus_changed(self, old, new):
+        """Whichever panel actually has keyboard focus is the active one —
+        this is what _panel() uses for delete/paste/rename/etc, so getting
+        it right matters far beyond just the address bar following along."""
+        if new is None or not self._dual_mode:
+            return
+        if self._left_tabs.isAncestorOf(new):
+            self._set_active_panel(self._left_tabs)
+        elif self._right_tabs.isAncestorOf(new):
+            self._set_active_panel(self._right_tabs)
 
     def _set_active_panel(self, tabs: TabWidget):
         if self._active_tabs != tabs:
@@ -574,7 +691,10 @@ class MainWindow(QMainWindow):
             self._active_tabs.setStyleSheet("")
             self._active_tabs = tabs
             # Highlight new active with a subtle accent border
-            self._active_tabs.setStyleSheet("QTabWidget { border: 1px solid #0078d4; border-radius: 4px; }")
+            from src.toggle_switch import ToggleSwitch as _TSAccent2
+            self._active_tabs.setStyleSheet(
+                f"QTabWidget {{ border: 1px solid {_TSAccent2._C_ON.name()}; border-radius: 6px; }}"
+            )
             self._on_tab_changed(tabs)
 
     def _toggle_focus_panel(self):
@@ -787,10 +907,77 @@ class MainWindow(QMainWindow):
 
     def _toggle_sidebar(self):
         self._sidebar_visible = not self._sidebar_visible
+        self._sidebar_auto_collapsed = False
         self._sidebar.setVisible(self._sidebar_visible)
-        self._sidebar_sep.setVisible(self._sidebar_visible)
         self._settings["show_sidebar"] = self._sidebar_visible
         save_settings(self._settings)
+
+    def _on_sidebar_splitter_moved(self, pos: int, index: int):
+        if self._sidebar.isVisible() and not self._sidebar_auto_collapsed:
+            self._settings["sidebar_width"] = self._sidebar.width()
+
+    def _toggle_transfer_mgr(self):
+        self._reposition_transfer_mgr()
+        self._transfer_mgr.toggle()
+
+    def _on_transfer_count_changed(self, active: int, total: int):
+        self._act_transfers.setVisible(total > 0)
+        if active > 0:
+            self._transfers_badge.setText(str(active) if active < 100 else "99+")
+            self._transfers_badge.show()
+            bw, bh = self._transfers_badge.width(), self._transfers_badge.height()
+            self._transfers_badge.move(self._transfers_btn.width() - bw + 2, -2)
+        else:
+            self._transfers_badge.hide()
+        self._reposition_transfer_mgr()
+
+    # Toolbar widgets hidden progressively as the window narrows, from least
+    # to most essential. Each keeps working via its keyboard shortcut / menu
+    # entry even while hidden — this only declutters the toolbar itself.
+    _TOOLBAR_TIERS = (
+        (1020, "_act_type_filter"),
+        (940,  "_recursive_btn", "_hist_btn"),
+        (860,  "_act_bookmark", "_act_theme_toggle"),
+    )
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        width = event.size().width()
+
+        COLLAPSE_BELOW = 760
+        RESTORE_ABOVE  = 820  # hysteresis so it doesn't flicker right at the edge
+        if self._sidebar_visible:
+            if width < COLLAPSE_BELOW and not self._sidebar_auto_collapsed:
+                self._sidebar_auto_collapsed = True
+                self._sidebar.setVisible(False)
+            elif width >= RESTORE_ABOVE and self._sidebar_auto_collapsed:
+                self._sidebar_auto_collapsed = False
+                self._sidebar.setVisible(True)
+
+        for threshold, *names in self._TOOLBAR_TIERS:
+            visible = width >= threshold + 30  # +30 hysteresis
+            for name in names:
+                widget = getattr(self, name, None)
+                if widget is not None and widget.isVisible() != visible:
+                    widget.setVisible(visible)
+
+        self._reposition_transfer_mgr()
+
+    def _reposition_transfer_mgr(self):
+        margin = 16
+        tm = self._transfer_mgr
+
+        # Width adapts to the window instead of a fixed pixel value, so it
+        # never overflows a narrow window; height adapts to content up to a
+        # cap, and shrinks further if the window itself is short.
+        width = max(tm.minimumWidth(), min(tm.maximumWidth(), self.width() - margin * 2))
+        max_h = max(140, min(480, self.height() - margin * 2, int(self.height() * 0.7)))
+        height = max(tm.minimumHeight(), min(max_h, tm.content_height_hint() + 2))
+
+        tm.resize(width, height)
+        x = self.width() - tm.width() - margin
+        y = self.height() - tm.height() - margin
+        tm.move(max(margin, x), max(margin, y))
 
     # ── File ops ──────────────────────────────────────────
 
@@ -833,9 +1020,10 @@ class MainWindow(QMainWindow):
     def _paste_current(self):
         p = self._panel()
         if p:
-            worker = p._paste_here()
-            if worker:
-                self._transfer_mgr.add_transfer(worker)
+            # Registering with the transfer panel happens via paste_started,
+            # connected once per panel in _add_tab — works the same whether
+            # paste comes from here, the in-panel shortcut, or drag & drop.
+            p._paste_here()
 
     def _copy_path(self):
         p = self._panel()
@@ -908,8 +1096,8 @@ class MainWindow(QMainWindow):
 
         vis = s.get("show_sidebar", True)
         self._sidebar_visible = vis
+        self._sidebar_auto_collapsed = False
         self._sidebar.setVisible(vis)
-        self._sidebar_sep.setVisible(vis)
         self._sidebar.set_show_recent_files(s.get("sidebar_recent_files", True))
         self._sidebar.refresh_recent_files()
 
@@ -937,7 +1125,9 @@ class MainWindow(QMainWindow):
 
         # Sidebar width
         sw = s.get("sidebar_width", 200)
-        self._sidebar.setFixedWidth(sw)
+        if self._sidebar.width() != sw:
+            total = sum(self._upper_splitter.sizes()) or (sw + 800)
+            self._upper_splitter.setSizes([sw, max(400, total - sw)])
 
         # Animation speed for ToggleSwitches
         from src.toggle_switch import ToggleSwitch as _TS
@@ -1097,61 +1287,21 @@ class MainWindow(QMainWindow):
     # ── Help ──────────────────────────────────────────────
 
     def _show_shortcuts(self):
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Atajos de teclado")
-        msg.setText("""
-<table cellspacing='6' cellpadding='2'>
-<tr><th align='left' style='color:#0078d4'>Navegación</th><th></th></tr>
-<tr><td>Atrás / Adelante</td><td><b>Alt+← / Alt+→</b></td></tr>
-<tr><td>Subir carpeta</td><td><b>Alt+↑ / Retroceso</b></td></tr>
-<tr><td>Ir a dirección</td><td><b>Ctrl+L</b></td></tr>
-<tr><td>Añadir marcador</td><td><b>Ctrl+D</b></td></tr>
-<tr><td>Buscar</td><td><b>Ctrl+F</b></td></tr>
-<tr><td>Actualizar</td><td><b>F5</b></td></tr>
-<tr><td colspan='2'>&nbsp;</td></tr>
-<tr><th align='left' style='color:#0078d4'>Pestañas</th><th></th></tr>
-<tr><td>Nueva pestaña</td><td><b>Ctrl+T</b></td></tr>
-<tr><td>Cerrar pestaña</td><td><b>Ctrl+W</b></td></tr>
-<tr><td>Cambiar pestaña</td><td><b>Ctrl+Tab / Ctrl+Shift+Tab</b></td></tr>
-<tr><td>Nueva ventana</td><td><b>Ctrl+N</b></td></tr>
-<tr><td colspan='2'>&nbsp;</td></tr>
-<tr><th align='left' style='color:#0078d4'>Archivos</th><th></th></tr>
-<tr><td>Copiar / Cortar / Pegar</td><td><b>Ctrl+C / X / V</b></td></tr>
-<tr><td>Copiar ruta</td><td><b>Ctrl+Shift+C</b></td></tr>
-<tr><td>Renombrar</td><td><b>F2</b></td></tr>
-<tr><td>Eliminar</td><td><b>Supr</b></td></tr>
-<tr><td>Propiedades</td><td><b>Alt+Enter</b></td></tr>
-<tr><td>Seleccionar todo</td><td><b>Ctrl+A</b></td></tr>
-<tr><td>Nueva carpeta</td><td><b>Ctrl+Shift+N</b></td></tr>
-<tr><td colspan='2'>&nbsp;</td></tr>
-<tr><th align='left' style='color:#0078d4'>Vista</th><th></th></tr>
-<tr><td>Detalles / Iconos / Lista</td><td><b>Ctrl+1 / 2 / 3</b></td></tr>
-<tr><td>Vista previa</td><td><b>Ctrl+P</b></td></tr>
-<tr><td>Barra lateral</td><td><b>Ctrl+B</b></td></tr>
-<tr><td>Type-ahead (saltar a archivo)</td><td><b>Escribe la primera letra</b></td></tr>
-<tr><td>Quicklook (vista previa)</td><td><b>Espacio</b></td></tr>
-<tr><td colspan='2'>&nbsp;</td></tr>
-<tr><th align='left' style='color:#0078d4'>Búsqueda</th><th></th></tr>
-<tr><td>Buscar en carpeta</td><td><b>Ctrl+F</b></td></tr>
-<tr><td>Búsqueda recursiva</td><td><b>Ctrl+Shift+F</b></td></tr>
-<tr><td colspan='2'>&nbsp;</td></tr>
-<tr><th align='left' style='color:#0078d4'>Archivo</th><th></th></tr>
-<tr><td>Comprimir ZIP</td><td><b>Clic derecho → Comprimir en ZIP</b></td></tr>
-<tr><td>Extraer archivo</td><td><b>Clic derecho → Extraer aquí</b></td></tr>
-</table>
-""")
-        msg.exec()
+        from src.shortcuts_dialog import ShortcutsDialog
+        ShortcutsDialog(self).exec()
+
+    def _show_welcome_tour(self):
+        from src.welcome_dialog import WelcomeDialog
+        WelcomeDialog(self).exec()
 
     def _show_about(self):
         msg = QMessageBox(self)
-        msg.setWindowTitle("Acerca de")
+        msg.setWindowTitle(t("menu.help.about"))
         msg.setText(
-            "<b style='font-size:16px'>Explorador de Archivos</b><br><br>"
-            "Versión 3.0<br>"
-            "Python + PyQt6 · Fluent Design<br><br>"
-            "<span style='color:#666;font-size:11px'>"
-            "Thumbnails · Pestañas · Vista previa · Búsqueda recursiva<br>"
-            "Marcadores · Historial · ZIP · Papelera · 6 temas</span>"
+            f"<b style='font-size:16px'>{t('app.title')}</b><br><br>"
+            f"{t('app.about.version')}<br>"
+            f"{t('app.about.tagline')}<br><br>"
+            f"<span style='color:#666;font-size:11px'>{t('app.about.features')}</span>"
         )
         msg.exec()
 
@@ -1175,5 +1325,8 @@ class MainWindow(QMainWindow):
                     if isinstance(w, FilePanelTab):
                         paths.append(w.current_path())
             self._settings["_tab_sessions"] = paths
-            save_settings(self._settings)
+        # Remember the user's drag-resized sidebar width for next launch.
+        if self._sidebar.isVisible() and not self._sidebar_auto_collapsed:
+            self._settings["sidebar_width"] = self._sidebar.width()
+        save_settings(self._settings)
         super().closeEvent(event)

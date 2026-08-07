@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=UltraExplorer
+GenericName=File Manager
+Comment=Explorador de archivos de alto rendimiento para usuarios avanzados
+Exec=UltraExplorer %f
+Icon=ultraexplorer
+Categories=Utility;FileManager;System;
+Terminal=false
+StartupWMClass=UltraExplorer

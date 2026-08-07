@@ -421,6 +421,44 @@ THEMES: Dict[str, Dict[str, Any]] = {
         "success":           "#c3e88d",
         "warning":           "#ffcb6b",
     },
+    "high_contrast": {
+        # WCAG AA-oriented theme: near-black background, pure-white text,
+        # and a high-visibility yellow accent — all pairings below sit at
+        # 7:1 contrast or better against their background.
+        "name": "High Contrast",
+        "bg_primary":        "#000000",
+        "bg_secondary":      "#0a0a0a",
+        "bg_tertiary":       "#141414",
+        "bg_hover":          "#1f1f1f",
+        "bg_selected":       "#ffe600",
+        "bg_selected_hover": "#fff066",
+        "accent":            "#ffe600",
+        "accent_hover":      "#fff066",
+        "accent_text":       "#000000",
+        "text_primary":      "#ffffff",
+        "text_secondary":    "#e6e6e6",
+        "text_muted":        "#b3b3b3",
+        "border":            "#ffffff",
+        "border_light":      "#cccccc",
+        "scrollbar_bg":      "#000000",
+        "scrollbar_handle":  "#ffffff",
+        "scrollbar_hover":   "#ffe600",
+        "tab_active":        "#141414",
+        "tab_inactive":      "#000000",
+        "input_bg":          "#141414",
+        "button_bg":         "#141414",
+        "button_hover":      "#262626",
+        "button_pressed":    "#000000",
+        "separator":         "#ffffff",
+        "sidebar_bg":        "#000000",
+        "preview_bg":        "#000000",
+        "toolbar_bg":        "#000000",
+        "statusbar_bg":      "#000000",
+        "statusbar_text":    "#ffffff",
+        "danger":            "#ff5c5c",
+        "success":           "#4ceb4c",
+        "warning":           "#ffe600",
+    },
 }
 
 
@@ -517,7 +555,7 @@ def get_stylesheet(theme_key:       str  = "dark_fluent",
     # Scrollbar handle: near-invisible for "hidden" style
     sb_handle = t["scrollbar_handle"] if scrollbar_style != "hidden" else "rgba(128,128,128,0.2)"
     # Toolbar sizing
-    tb_pad    = "1px 4px" if toolbar_compact else "3px 6px"
+    tb_pad    = "1px 4px" if toolbar_compact else "5px 8px"
     tb_btn_h  = "22px"    if toolbar_compact else "28px"
     return f"""
 /* ─── Global ─────────────────────────────────────────── */
@@ -541,7 +579,7 @@ QDialog {{
 QToolBar {{
     background-color: {t['toolbar_bg']};
     border-bottom: 1px solid {t['border']};
-    spacing: 4px;
+    spacing: 6px;
     padding: {tb_pad};
 }}
 
@@ -550,7 +588,7 @@ QToolButton {{
     color: {t['text_primary']};
     border: none;
     border-radius: {rb}px;
-    padding: 5px 8px;
+    padding: 6px 9px;
     min-width: 26px;
     min-height: {tb_btn_h};
     font-size: {fs}px;
@@ -569,6 +607,13 @@ QToolButton:checked {{
     background-color: {t['bg_selected']};
     color: {t['accent_text']};
     border: 1px solid {t['accent']};
+}}
+
+/* Keyboard-focus ring (global outline is disabled above, so give every
+   interactive control an explicit, visible focus indicator instead). */
+QToolButton:focus {{
+    border: 2px solid {t['accent']};
+    padding: 4px 7px;
 }}
 
 /* ─── Address Bar ─────────────────────────────────────── */
@@ -596,12 +641,16 @@ QLineEdit:focus {{
 
 #SidebarItem {{
     border-radius: {rb}px;
-    margin: 1px 6px;
+    margin: 1px 8px;
 }}
 
 #SidebarItem:hover {{
     background-color: {t['bg_hover']};
-    padding-left: 12px;
+}}
+
+#SidebarItem:focus {{
+    border: 2px solid {t['accent']};
+    margin: -1px 7px 1px 7px;
 }}
 
 /* ─── File Views ──────────────────────────────────────── */
@@ -616,21 +665,31 @@ QTreeView::item:selected {{
     border: 1px solid {t['accent']};
 }}
 
+QTreeView::item:focus, QListView::item:focus {{
+    border: 2px solid {t['accent']};
+}}
+
+QTreeView:focus, QListView:focus {{
+    border: 1px solid {t['accent']};
+}}
+
 QHeaderView::section {{
     background-color: {t['bg_secondary']};
     color: {t['text_muted']};
     border: none;
-    padding: 8px 12px;
+    border-bottom: 1px solid {t['border']};
+    padding: 9px 12px;
     font-size: 11px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.6px;
 }}
 
 /* ─── Preview Panel ───────────────────────────────────── */
 #PreviewPanel {{
     background-color: {t['preview_bg']};
     border-left: 1px solid {t['border']};
-    min-width: 220px;
+    min-width: 190px;
 }}
 
 #PreviewTitle {{
@@ -803,6 +862,10 @@ QPushButton#AccentButton:hover {{
     background-color: {t['accent_hover']};
 }}
 
+QPushButton:focus, QComboBox:focus {{
+    border: 2px solid {t['accent']};
+}}
+
 /* ─── CheckBox & RadioButton ──────────────────────────── */
 QCheckBox, QRadioButton {{
     color: {t['text_primary']};
@@ -831,6 +894,11 @@ QCheckBox::indicator:checked {{
 QCheckBox::indicator:checked:hover {{
     background-color: {t['accent_hover']};
     border-color: {t['accent_hover']};
+}}
+
+QCheckBox:focus::indicator, QRadioButton:focus::indicator {{
+    border-color: {t['accent']};
+    border-width: 2px;
 }}
 
 QCheckBox::indicator:disabled {{

@@ -3,8 +3,16 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLineEdit, QListWidget, 
     QListWidgetItem, QFrame, QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QEvent
+from PyQt6.QtCore import Qt, pyqtSignal, QEvent, QSize
 from PyQt6.QtGui import QColor, QKeyEvent
+
+from src.i18n import t
+from src.logger import get_logger
+from src import icon_provider as ico
+from src.toggle_switch import ToggleSwitch
+
+_log = get_logger("spotlight")
+
 
 class SpotlightBar(QFrame):
     """Global search and command bar (Ctrl+K)."""
@@ -21,72 +29,76 @@ class SpotlightBar(QFrame):
         self._search_timer.setSingleShot(True)
         self._search_timer.setInterval(150) # 150ms debounce
         self._search_timer.timeout.connect(self._do_search)
-        self.setStyleSheet("""
-            #SpotlightBar {
+        accent = ToggleSwitch._C_ON
+        self.setStyleSheet(f"""
+            #SpotlightBar {{
                 background: #252526;
-                border: 1px solid #444;
-                border-radius: 12px;
-            }
+                border: 1px solid #3a3a3a;
+                border-radius: 14px;
+            }}
         """)
-        
+
         # Shadow
         shadow = QGraphicsDropShadowEffect(self)
-        shadow.setBlurRadius(30)
+        shadow.setBlurRadius(40)
         shadow.setXOffset(0)
-        shadow.setYOffset(10)
-        shadow.setColor(QColor(0, 0, 0, 150))
+        shadow.setYOffset(14)
+        shadow.setColor(QColor(0, 0, 0, 160))
         self.setGraphicsEffect(shadow)
-        
+
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(15, 15, 15, 15)
-        layout.setSpacing(10)
-        
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
+
         self.input = QLineEdit()
-        self.input.setPlaceholderText("Buscar archivos o comandos...  (Esc para cerrar)")
-        self.input.setStyleSheet("""
-            QLineEdit {
+        self.input.setPlaceholderText(t("spotlight.placeholder"))
+        self.input.setStyleSheet(f"""
+            QLineEdit {{
                 background: #1e1e1e;
-                border: 1px solid #0078d4;
-                border-radius: 6px;
-                padding: 10px 15px;
+                border: 1px solid {accent.name()};
+                border-radius: 8px;
+                padding: 12px 16px;
                 font-size: 16px;
                 color: white;
-            }
+            }}
         """)
         self.input.textChanged.connect(self._on_text_changed)
         layout.addWidget(self.input)
-        
+
         self.results = QListWidget()
-        self.results.setStyleSheet("""
-            QListWidget {
+        self.results.setIconSize(QSize(18, 18))
+        self.results.setSpacing(2)
+        self.results.setStyleSheet(f"""
+            QListWidget {{
                 background: transparent;
                 border: none;
                 outline: none;
                 font-size: 14px;
-            }
-            QListWidget::item {
-                padding: 10px;
-                border-radius: 4px;
+            }}
+            QListWidget::item {{
+                padding: 10px 12px;
+                border-radius: 8px;
                 color: #ccc;
-            }
-            QListWidget::item:selected {
-                background: #094771;
+            }}
+            QListWidget::item:selected {{
+                background: rgba({accent.red()},{accent.green()},{accent.blue()},0.30);
                 color: white;
-            }
-            QListWidget::item:hover {
-                background: #2a2d2e;
-            }
+            }}
+            QListWidget::item:hover {{
+                background: rgba(255,255,255,0.06);
+            }}
         """)
         self.results.itemActivated.connect(self._on_item_activated)
         layout.addWidget(self.results)
         
         self._commands = [
-            ("Tema Oscuro", "cmd:theme_dark"),
-            ("Tema Claro", "cmd:theme_light"),
-            ("Nueva Pestaña", "cmd:new_tab"),
-            ("Nueva Carpeta", "cmd:new_folder"),
-            ("Abrir Terminal", "cmd:open_terminal"),
-            ("Ver Configuración", "cmd:settings"),
+            (t("spotlight.cmd.theme_dark"), "cmd:theme_dark"),
+            (t("spotlight.cmd.theme_light"), "cmd:theme_light"),
+            (t("spotlight.cmd.new_tab"), "cmd:new_tab"),
+            (t("spotlight.cmd.new_folder"), "cmd:new_folder"),
+            (t("spotlight.cmd.open_terminal"), "cmd:open_terminal"),
+            (t("spotlight.cmd.settings"), "cmd:settings"),
+            (t("spotlight.cmd.show_shortcuts"), "cmd:show_shortcuts"),
         ]
         
         self.setFocusProxy(self.input)
@@ -108,7 +120,7 @@ class SpotlightBar(QFrame):
     def _populate_initial(self):
         self.results.clear()
         for label, cmd in self._commands:
-            item = QListWidgetItem(f"⚡  {label}")
+            item = QListWidgetItem(ico.bolt_icon("#61afef"), label)
             item.setData(Qt.ItemDataRole.UserRole, cmd)
             self.results.addItem(item)
         self.results.setCurrentRow(0)
@@ -128,11 +140,11 @@ class SpotlightBar(QFrame):
         # 1. Commands matching
         for label, cmd in self._commands:
             if query in label.lower():
-                item = QListWidgetItem(f"⚡  {label}")
+                item = QListWidgetItem(ico.bolt_icon("#61afef"), label)
                 item.setData(Qt.ItemDataRole.UserRole, cmd)
                 item.setForeground(QColor("#61afef"))
                 self.results.addItem(item)
-        
+
         # 2. Local File/Folder matching
         if self._current_path and os.path.isdir(self._current_path):
             try:
@@ -141,17 +153,17 @@ class SpotlightBar(QFrame):
                     count = 0
                     for entry in it:
                         if query in entry.name.lower():
-                            icon = "📁" if entry.is_dir() else "📄"
-                            item = QListWidgetItem(f"{icon}  {entry.name}")
+                            icon = ico.folder() if entry.is_dir() else ico.file_icon()
+                            item = QListWidgetItem(icon, entry.name)
                             item.setData(Qt.ItemDataRole.UserRole, f"path:{entry.path}")
                             self.results.addItem(item)
                             count += 1
                             if count >= 20: break
             except Exception:
-                pass
+                _log.debug("Failed to scan %s for spotlight results", self._current_path, exc_info=True)
 
         # 3. Global search placeholder
-        item = QListWidgetItem(f"🔍  Buscar '{text}' recursivamente...")
+        item = QListWidgetItem(ico.search_icon("#98c379"), t("spotlight.search_recursive", text=text))
         item.setData(Qt.ItemDataRole.UserRole, f"search:{text}")
         item.setForeground(QColor("#98c379"))
         self.results.addItem(item)

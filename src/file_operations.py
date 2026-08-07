@@ -10,11 +10,23 @@ from PyQt6.QtWidgets import (
 )
 
 from src.utils import format_size
+from src.i18n import t
+from src.logger import get_logger
+from src import icon_provider as ico
+
+_log = get_logger("file_operations")
 
 
 class FileOperationWorker(QThread):
-    progress = pyqtSignal(int, str)
+    # progress(percent, current_file_name, index_1based, total)
+    progress = pyqtSignal(int, str, int, int)
+    # finished(success, message) — success is True if at least one item
+    # made it through; message carries an error summary when some/all failed.
     finished = pyqtSignal(bool, str)
+    # item_error(source_path, error_message) — emitted per failed item so the
+    # UI can report exactly what failed without aborting the whole batch.
+    item_error = pyqtSignal(str, str)
+    paused_changed = pyqtSignal(bool)
 
     def __init__(
         self,
@@ -30,40 +42,73 @@ class FileOperationWorker(QThread):
         self.destination = destination
         self.conflict_action = conflict_action
         self._cancelled = False
+        self._paused = False
 
     def cancel(self):
         self._cancelled = True
 
+    def is_paused(self) -> bool:
+        return self._paused
+
+    def set_paused(self, paused: bool):
+        self._paused = paused
+        self.paused_changed.emit(paused)
+
+    def toggle_pause(self):
+        self.set_paused(not self._paused)
+
     def run(self):
+        total = len(self.sources)
+        errors: list[tuple[str, str]] = []
+        completed = 0
         try:
-            total = len(self.sources)
             for i, src in enumerate(self.sources):
+                while self._paused and not self._cancelled:
+                    self.msleep(120)
                 if self._cancelled:
-                    self.finished.emit(False, "Operación cancelada")
+                    self.finished.emit(
+                        completed > 0,
+                        t("op.cancelled_partial", done=completed, total=total)
+                        if completed else t("op.cancelled"),
+                    )
                     return
 
                 name = os.path.basename(src)
-                self.progress.emit(int((i / total) * 100), name)
+                self.progress.emit(int((i / total) * 100), name, i + 1, total)
 
-                dest_path = os.path.join(self.destination, name)
-                dest_path = self._resolve_conflict(dest_path)
-                if not dest_path:
-                    continue
+                try:
+                    dest_path = os.path.join(self.destination, name)
+                    dest_path = self._resolve_conflict(dest_path)
+                    if not dest_path:
+                        continue
 
-                if self.operation == "copy":
-                    if os.path.isdir(src):
-                        shutil.copytree(src, dest_path, dirs_exist_ok=True)
-                    else:
-                        shutil.copy2(src, dest_path)
-                elif self.operation == "move":
-                    shutil.move(src, dest_path)
+                    if self.operation == "copy":
+                        if os.path.isdir(src):
+                            shutil.copytree(src, dest_path, dirs_exist_ok=True)
+                        else:
+                            shutil.copy2(src, dest_path)
+                    elif self.operation == "move":
+                        shutil.move(src, dest_path)
+                    completed += 1
+                except PermissionError as e:
+                    _log.warning("Permission denied on %s during %s: %s", src, self.operation, e)
+                    msg = t("op.permission_denied", error=e)
+                    errors.append((name, msg))
+                    self.item_error.emit(src, msg)
+                except Exception as e:
+                    _log.exception("Failed to %s %s", self.operation, src)
+                    errors.append((name, str(e)))
+                    self.item_error.emit(src, str(e))
 
-            self.progress.emit(100, "Completado")
-            self.finished.emit(True, "")
-        except PermissionError as e:
-            self.finished.emit(False, f"Permiso denegado: {e}")
+            self.progress.emit(100, t("op.completed"), total, total)
+            if errors:
+                summary = t("op.completed_with_errors", done=completed, failed=len(errors))
+                self.finished.emit(completed > 0, summary)
+            else:
+                self.finished.emit(True, "")
         except Exception as e:
-            self.finished.emit(False, str(e))
+            _log.exception("File operation %s failed", self.operation)
+            self.finished.emit(completed > 0, str(e))
 
     def _resolve_conflict(self, dest_path: str) -> Optional[str]:
         if not os.path.exists(dest_path):
@@ -122,7 +167,7 @@ class DeleteConfirmDialog(QDialog):
         self._paths = paths
         self._to_trash = to_trash
 
-        self.setWindowTitle("Eliminar elementos")
+        self.setWindowTitle(t("delete.title"))
         self.setModal(True)
         self.setMinimumWidth(560)
         self.setMinimumHeight(420)
@@ -132,7 +177,7 @@ class DeleteConfirmDialog(QDialog):
         root.setSpacing(12)
 
         files, folders, total_size, unknown_dirs = self._summarize(paths)
-        action = "Mover a la papelera" if to_trash else "Eliminar permanentemente"
+        action = t("delete.action_trash") if to_trash else t("delete.action_permanent")
         accent = "#dcdcaa" if to_trash else "#f44747"
         bg = "rgba(220, 220, 170, 0.10)" if to_trash else "rgba(244, 71, 71, 0.12)"
 
@@ -141,11 +186,14 @@ class DeleteConfirmDialog(QDialog):
         header_l.setContentsMargins(0, 0, 0, 0)
         header_l.setSpacing(12)
 
-        icon = QLabel("🗑" if to_trash else "⚠")
+        icon = QLabel()
+        icon.setPixmap(
+            (ico.delete_icon(accent) if to_trash else ico.warning_icon(accent)).pixmap(22, 22)
+        )
         icon.setFixedSize(44, 44)
         icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon.setStyleSheet(
-            f"font-size: 24px; border-radius: 8px; background: {bg}; color: {accent};"
+            f"border-radius: 8px; background: {bg};"
         )
         header_l.addWidget(icon)
 
@@ -167,7 +215,7 @@ class DeleteConfirmDialog(QDialog):
         sep.setFixedHeight(1)
         root.addWidget(sep)
 
-        list_label = QLabel("Elementos seleccionados")
+        list_label = QLabel(t("delete.selected_items"))
         list_label.setStyleSheet("color: #aaa; font-size: 11px; font-weight: 700;")
         root.addWidget(list_label)
 
@@ -181,16 +229,16 @@ class DeleteConfirmDialog(QDialog):
             item.setSizeHint(QSize(0, 42))
             self._list.addItem(item)
         if len(paths) > 200:
-            self._list.addItem(QListWidgetItem(f"... y {len(paths) - 200} elementos más"))
+            self._list.addItem(QListWidgetItem(t("delete.more_items", count=len(paths) - 200)))
         root.addWidget(self._list, 1)
 
         if to_trash:
-            note = QLabel("Podrás restaurarlos desde la papelera mientras sigan allí.")
+            note = QLabel(t("delete.trash_note"))
             note.setStyleSheet("color: #888; font-size: 11px;")
             root.addWidget(note)
             self._confirm_cb = None
         else:
-            warning = QLabel("Esta acción no usa la papelera y no se puede deshacer desde la app.")
+            warning = QLabel(t("delete.permanent_warning"))
             warning.setWordWrap(True)
             warning.setStyleSheet(
                 "color: #ffb3b3; background: rgba(244,71,71,0.10);"
@@ -198,11 +246,11 @@ class DeleteConfirmDialog(QDialog):
                 "padding: 8px 10px; font-size: 12px;"
             )
             root.addWidget(warning)
-            self._confirm_cb = QCheckBox("Entiendo que se eliminarán permanentemente")
+            self._confirm_cb = QCheckBox(t("delete.permanent_confirm_cb"))
             root.addWidget(self._confirm_cb)
 
         buttons = QDialogButtonBox()
-        cancel = QPushButton("Cancelar")
+        cancel = QPushButton(t("common.cancel"))
         cancel.clicked.connect(self.reject)
         self._delete_btn = QPushButton(action)
         self._delete_btn.setObjectName("AccentButton")
@@ -237,26 +285,26 @@ class DeleteConfirmDialog(QDialog):
     @staticmethod
     def _subtitle(paths: List[str], files: int, folders: int, total_size: int,
                   unknown_dirs: bool, to_trash: bool) -> str:
-        parts = [f"{len(paths)} elemento(s)"]
+        parts = [t("delete.subtitle.items", count=len(paths))]
         detail = []
         if files:
-            detail.append(f"{files} archivo(s)")
+            detail.append(t("delete.subtitle.files", count=files))
         if folders:
-            detail.append(f"{folders} carpeta(s)")
+            detail.append(t("delete.subtitle.folders", count=folders))
         if detail:
             parts.append(", ".join(detail))
         if total_size:
             size_text = format_size(total_size)
             if unknown_dirs:
-                size_text += " + contenido de carpetas"
+                size_text += t("delete.subtitle.folder_content")
             parts.append(size_text)
-        target = "a la papelera" if to_trash else "de forma definitiva"
-        return f"Se eliminarán {', '.join(parts)} {target}."
+        target = t("delete.subtitle.target_trash") if to_trash else t("delete.subtitle.target_permanent")
+        return t("delete.subtitle.will_delete", parts=", ".join(parts), target=target)
 
     @staticmethod
     def _item_label(path: str) -> str:
         name = os.path.basename(path) or path
-        kind = "Carpeta" if os.path.isdir(path) else "Archivo"
+        kind = t("delete.item.folder") if os.path.isdir(path) else t("delete.item.file")
         parent = os.path.dirname(path)
         return f"{kind}  ·  {name}\n{parent}"
 
@@ -274,19 +322,25 @@ def delete_files(paths: List[str], parent=None, use_trash: bool = True,
     for p in paths:
         try:
             if to_trash:
-                _send2trash.send2trash(p)
+                # send2trash's Windows backend calls into the Shell API
+                # (SHCreateItemFromParsingName), which expects a native
+                # backslash-style path — the app works internally with
+                # forward slashes (Qt-style), which that API rejects wholesale
+                # with a generic "parameter is incorrect" error.
+                _send2trash.send2trash(os.path.normpath(p))
             elif os.path.isdir(p):
                 shutil.rmtree(p)
             else:
                 os.remove(p)
         except Exception as e:
+            _log.exception("Failed to delete %s", p)
             errors.append(f"{os.path.basename(p)}: {e}")
 
     if errors:
         QMessageBox.warning(
             parent,
-            "Errores al eliminar",
-            "No se pudieron eliminar:\n" + "\n".join(errors),
+            t("err.delete_title"),
+            t("err.delete_body", errors="\n".join(errors)),
         )
     return True
 
@@ -295,15 +349,17 @@ def rename_item(old_path: str, new_name: str) -> tuple[bool, str]:
     parent_dir = os.path.dirname(old_path)
     new_path = os.path.join(parent_dir, new_name)
     if os.path.exists(new_path):
-        return False, "Ya existe un elemento con ese nombre"
+        return False, t("err.name_taken")
     try:
         os.rename(old_path, new_path)
         return True, new_path
     except Exception as e:
+        _log.exception("Failed to rename %s -> %s", old_path, new_path)
         return False, str(e)
 
 
-def create_folder(parent_dir: str, name: str = "Nueva carpeta") -> tuple[bool, str]:
+def create_folder(parent_dir: str, name: Optional[str] = None) -> tuple[bool, str]:
+    name = name or t("folder.new_default_name")
     base = os.path.join(parent_dir, name)
     path = base
     counter = 1
@@ -314,6 +370,7 @@ def create_folder(parent_dir: str, name: str = "Nueva carpeta") -> tuple[bool, s
         os.makedirs(path)
         return True, path
     except Exception as e:
+        _log.exception("Failed to create folder %s", path)
         return False, str(e)
 
 
@@ -335,16 +392,16 @@ def paste_files(destination: str, parent_widget=None) -> Optional[FileOperationW
     ]
     if conflicts and conflict_action == "ask":
         msg = QMessageBox(parent_widget)
-        msg.setWindowTitle("Conflictos al pegar")
+        msg.setWindowTitle(t("paste.conflicts_title"))
         msg.setIcon(QMessageBox.Icon.Question)
-        msg.setText(f"{len(conflicts)} elemento(s) ya existen en el destino.")
+        msg.setText(t("paste.conflicts_text", count=len(conflicts)))
         shown = "\n".join(f"  • {name}" for name in conflicts[:8])
         if len(conflicts) > 8:
-            shown += f"\n  ... y {len(conflicts) - 8} más"
+            shown += "\n" + t("paste.conflicts_more", count=len(conflicts) - 8)
         msg.setInformativeText(shown)
-        rename_btn = msg.addButton("Renombrar copias", QMessageBox.ButtonRole.AcceptRole)
-        skip_btn = msg.addButton("Saltar existentes", QMessageBox.ButtonRole.ActionRole)
-        cancel_btn = msg.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+        rename_btn = msg.addButton(t("paste.rename_copies"), QMessageBox.ButtonRole.AcceptRole)
+        skip_btn = msg.addButton(t("paste.skip_existing"), QMessageBox.ButtonRole.ActionRole)
+        cancel_btn = msg.addButton(t("common.cancel"), QMessageBox.ButtonRole.RejectRole)
         msg.setDefaultButton(rename_btn)
         msg.exec()
         clicked = msg.clickedButton()

@@ -1,9 +1,15 @@
 import os
 from PyQt6.QtCore import QThread, pyqtSignal
 
+from src.logger import get_logger
+
+_log = get_logger("search_worker")
+
+
 class RecursiveSearchWorker(QThread):
     found    = pyqtSignal(str, str)  # full_path, display_name
     finished = pyqtSignal(int)
+    error    = pyqtSignal(str)
 
     MAX_RESULTS = 2_000
 
@@ -42,6 +48,7 @@ class RecursiveSearchWorker(QThread):
                             break
                 if count >= self.MAX_RESULTS:
                     break
-        except Exception:
-            pass
+        except Exception as e:
+            _log.exception("Recursive search failed under %s", self._root)
+            self.error.emit(str(e))
         self.finished.emit(count)

@@ -9,12 +9,23 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QLineEdit, QCheckBox, QTabWidget, QWidget,
     QFrame, QDialogButtonBox, QMessageBox, QSizePolicy,
+    QFileIconProvider,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QFileInfo
+from PyQt6.QtGui import QFont, QIcon
 
-from src.utils import format_size, format_date, get_file_icon
+from src.utils import format_size, format_date
 from src.file_operations import rename_item
+from src.i18n import t
+from src.logger import get_logger
+
+_log = get_logger("properties_dialog")
+
+_icon_provider = QFileIconProvider()
+
+
+def _native_icon(path: str) -> QIcon:
+    return _icon_provider.icon(QFileInfo(path))
 
 
 class _FolderSizeWorker(QThread):
@@ -45,7 +56,7 @@ class _FolderSizeWorker(QThread):
                     except OSError:
                         pass
         except Exception:
-            pass
+            _log.debug("Folder size scan interrupted for %s", self.path, exc_info=True)
         self.result.emit(total, files, folders)
 
 
@@ -82,7 +93,7 @@ class PropertiesDialog(QDialog):
         self._is_dir = os.path.isdir(path)
         self._worker: _FolderSizeWorker = None
 
-        self.setWindowTitle("Propiedades")
+        self.setWindowTitle(t("dlg.properties.title"))
         self.setMinimumWidth(420)
         self.setMinimumHeight(460)
         self.setModal(True)
@@ -94,17 +105,17 @@ class PropertiesDialog(QDialog):
         tabs = QTabWidget()
         root.addWidget(tabs)
 
-        tabs.addTab(self._build_general_tab(), "General")
+        tabs.addTab(self._build_general_tab(), t("dlg.properties.tab.general"))
         if not self._is_dir:
-            tabs.addTab(self._build_details_tab(), "Detalles")
+            tabs.addTab(self._build_details_tab(), t("dlg.properties.tab.details"))
 
         # Buttons
         btn_layout = QHBoxLayout()
         btn_layout.setContentsMargins(16, 8, 16, 12)
-        ok_btn = QPushButton("Aceptar")
+        ok_btn = QPushButton(t("common.ok"))
         ok_btn.setObjectName("AccentButton")
         ok_btn.clicked.connect(self._apply_and_close)
-        cancel_btn = QPushButton("Cancelar")
+        cancel_btn = QPushButton(t("common.cancel"))
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addStretch()
         btn_layout.addWidget(cancel_btn)
@@ -121,8 +132,8 @@ class PropertiesDialog(QDialog):
 
         # Icon + name
         top = QHBoxLayout()
-        icon_lbl = QLabel(get_file_icon(self._path, self._is_dir))
-        icon_lbl.setStyleSheet("font-size: 42px;")
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(_native_icon(self._path).pixmap(40, 40))
         icon_lbl.setFixedSize(56, 56)
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         top.addWidget(icon_lbl)
@@ -247,7 +258,7 @@ class PropertiesDialog(QDialog):
         if new_name and new_name != old_name:
             ok, result = rename_item(self._path, new_name)
             if not ok:
-                QMessageBox.warning(self, "Error al renombrar", result)
+                QMessageBox.warning(self, t("err.rename_title"), result)
                 return
             self.renamed.emit(result)
         self.accept()

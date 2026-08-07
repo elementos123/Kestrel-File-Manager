@@ -8,16 +8,18 @@ from PyQt6.QtWidgets import (
     QTreeView, QListView, QSplitter, QListWidget, QListWidgetItem,
     QMenu, QInputDialog, QMessageBox, QApplication, QFrame, QLabel,
     QSizePolicy, QStackedWidget, QStyledItemDelegate, QStyle,
-    QStyleOptionViewItem,
+    QStyleOptionViewItem, QFileIconProvider,
 )
 from PyQt6.QtCore import (
     Qt, QDir, QSortFilterProxyModel, QModelIndex,
-    pyqtSignal, QMimeData, QUrl, QTimer, QSize, QRect, QThread,
+    pyqtSignal, QMimeData, QUrl, QTimer, QSize, QRect, QThread, QFileInfo,
 )
 from PyQt6.QtGui import (
     QFileSystemModel, QAction, QKeySequence,
     QDrag, QIcon, QPainter, QColor, QFont, QPen,
 )
+
+_search_icon_provider = QFileIconProvider()
 
 _FILE_TYPE_COLORS: dict[str, str] = {
     # Images
@@ -51,7 +53,7 @@ from src.breadcrumb import BreadcrumbWidget
 from src.preview import PreviewPanel
 from src.thumbnail_cache import ThumbnailCache
 from src.utils import (
-    get_file_icon, format_size, format_date, format_date_relative,
+    format_size, format_date, format_date_relative,
     format_size_in_unit, open_file, open_in_terminal, is_image,
 )
 from src.file_operations import (
@@ -64,6 +66,10 @@ from src.command_bar import CommandBar
 from src.models.file_proxy_model import FileProxyModel
 from src.delegates.icon_delegate import IconDelegate
 from src.workers.search_worker import RecursiveSearchWorker
+from src.i18n import t
+from src.logger import get_logger
+
+_log = get_logger("file_panel")
 
 VIEW_DETAILS = 0
 VIEW_ICONS   = 1
@@ -76,6 +82,7 @@ class FilePanelTab(QWidget):
     path_changed   = pyqtSignal(str)
     status_message = pyqtSignal(str)
     title_changed  = pyqtSignal(str)
+    paste_started  = pyqtSignal(object)  # emits the FileOperationWorker
 
     def __init__(self, start_path: str = "", parent=None):
         super().__init__(parent)
@@ -90,6 +97,11 @@ class FilePanelTab(QWidget):
         self._typeahead_timer.setInterval(800)
         self._typeahead_timer.timeout.connect(self._clear_typeahead)
         self._recursive_mode     = False
+        # Strong refs to in-flight FileOperationWorker threads: without this,
+        # nothing keeps a started QThread alive once the function that
+        # created it returns, and Python's GC can collect it mid-copy —
+        # which crashes the whole process with no Python traceback.
+        self._active_workers: list = []
         self._search_worker: Optional[RecursiveSearchWorker] = None
         self._search_debounce    = QTimer()
         self._search_debounce.setSingleShot(True)
@@ -101,6 +113,10 @@ class FilePanelTab(QWidget):
 
         # Thumbnail cache shared across views
         self._thumb_cache = ThumbnailCache(QSize(self._icon_size, self._icon_size))
+
+        # Required for dragEnterEvent/dropEvent below to ever fire — without
+        # this, Qt never delivers drag-and-drop events to this widget at all.
+        self.setAcceptDrops(True)
 
         root_layout = QVBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
@@ -154,9 +170,10 @@ class FilePanelTab(QWidget):
         self._results_header.setFixedHeight(22)
         rp_vl.addWidget(self._results_header)
         self._results_list = QListWidget()
+        self._results_list.setIconSize(QSize(18, 18))
         self._results_list.setStyleSheet(
             "QListWidget { background: #181825; color: #cdd6f4; border: none; font-size: 12px; }"
-            "QListWidget::item { padding: 4px 10px; }"
+            "QListWidget::item { padding: 6px 10px; border-radius: 4px; margin: 1px 4px; }"
             "QListWidget::item:hover { background: #313244; }"
             "QListWidget::item:selected { background: #45475a; }"
         )
@@ -259,9 +276,14 @@ class FilePanelTab(QWidget):
         view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         view.setDragEnabled(True)
-        view.setAcceptDrops(True)
-        view.setDropIndicatorShown(True)
-        view.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)
+        # DragOnly (not DragDrop): the view can still originate a drag with
+        # proper file-URL mime data, but doesn't try to handle the *drop*
+        # itself — QFileSystemModel's built-in dropMimeData doesn't reliably
+        # do anything useful across two separate model instances (one per
+        # panel), so drops need to bubble up to FilePanelTab.dropEvent()
+        # below, which does a real copy via _paste_to(). DragDrop here would
+        # swallow the event at the view and nothing would happen.
+        view.setDragDropMode(QAbstractItemView.DragDropMode.DragOnly)
         view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         view.customContextMenuRequested.connect(self._show_context_menu)
         view.doubleClicked.connect(self._on_double_click)  # default; toggled by set_single_click
@@ -287,7 +309,7 @@ class FilePanelTab(QWidget):
             from src.recent_folders import push_recent
             push_recent(path)
         except Exception:
-            pass
+            _log.debug("Failed to record recent folder %s", path, exc_info=True)
 
     def _set_root(self, path: str):
         self._fs_model.setRootPath(path)
@@ -328,9 +350,10 @@ class FilePanelTab(QWidget):
     def can_go_forward(self) -> bool: return self._hist_pos < len(self._history) - 1
 
     def refresh(self):
+        path = self.current_path()  # capture before clearing — setRootPath("") below wipes it
         self._thumb_cache.clear()
         self._fs_model.setRootPath("")
-        self._set_root(self.current_path())
+        self._set_root(path)
 
     # ── View modes ────────────────────────────────────────
 
@@ -389,12 +412,16 @@ class FilePanelTab(QWidget):
         )
         self._search_worker.found.connect(self._on_result_found)
         self._search_worker.finished.connect(self._on_search_finished)
+        self._search_worker.error.connect(self._on_search_error)
         self._search_worker.start()
+
+    def _on_search_error(self, error: str):
+        self.status_message.emit(t("err.search_failed", error=error))
 
     def _on_result_found(self, path: str, name: str):
         from PyQt6.QtWidgets import QListWidgetItem
-        icon = get_file_icon(path, os.path.isdir(path))
-        item = QListWidgetItem(f"{icon}  {name}  —  {os.path.dirname(path)}")
+        icon = _search_icon_provider.icon(QFileInfo(path))
+        item = QListWidgetItem(icon, f"{name}  —  {os.path.dirname(path)}")
         item.setData(Qt.ItemDataRole.UserRole, path)
         item.setToolTip(path)
         self._results_list.addItem(item)
@@ -470,7 +497,7 @@ class FilePanelTab(QWidget):
                 from src.recent_files import push_recent_file
                 push_recent_file(path)
             except Exception:
-                pass
+                _log.debug("Failed to record recent file %s", path, exc_info=True)
 
     def _on_selection_changed(self, *_):
         paths = self.selected_paths()
@@ -649,12 +676,12 @@ class FilePanelTab(QWidget):
     def _rename(self, path: str):
         old_name = os.path.basename(path)
         new_name, ok = QInputDialog.getText(
-            self, "Renombrar", "Nuevo nombre:", text=old_name
+            self, t("dlg.rename.simple_title"), t("dlg.rename.simple_label"), text=old_name
         )
         if ok and new_name and new_name != old_name:
             success, result = rename_item(path, new_name)
             if not success:
-                QMessageBox.warning(self, "Error al renombrar", result)
+                QMessageBox.warning(self, t("err.rename_title"), result)
 
     def _delete(self, paths: list[str]):
         use_trash      = getattr(self, "_use_trash", True)
@@ -679,13 +706,24 @@ class FilePanelTab(QWidget):
         self._cmd_bar.update_state(self.selected_paths(), has_clipboard=cb.has_items())
 
     def _paste_here(self):
-        worker = paste_files(self.current_path(), self)
+        return self._paste_to(self.current_path())
+
+    def _paste_to(self, dest: str):
+        """Start a paste into `dest`, keeping a strong reference to the
+        worker thread for as long as it runs (see _active_workers)."""
+        worker = paste_files(dest, self)
         if worker:
+            self._active_workers.append(worker)
+            self.paste_started.emit(worker)
+
             def _after_paste(ok: bool, msg: str):
+                if worker in self._active_workers:
+                    self._active_workers.remove(worker)
                 QTimer.singleShot(250, self.refresh)
                 self.status_message.emit("Pegado completado" if ok else (msg or "Pegado cancelado"))
 
             worker.finished.connect(_after_paste)
+        return worker
 
     def set_use_trash(self, enabled: bool):
         self._use_trash = enabled
@@ -811,7 +849,7 @@ class FilePanelTab(QWidget):
     def _new_folder(self):
         ok, result = create_folder(self.current_path())
         if not ok:
-            QMessageBox.warning(self, "Error", result)
+            QMessageBox.warning(self, t("err.title"), result)
         else:
             QTimer.singleShot(300, lambda: self._rename(result))
 
@@ -826,7 +864,8 @@ class FilePanelTab(QWidget):
             open(path, "w").close()
             QTimer.singleShot(300, lambda: self._rename(path))
         except Exception as e:
-            QMessageBox.warning(self, "Error", str(e))
+            _log.exception("Failed to create new text file %s", path)
+            QMessageBox.warning(self, t("err.title"), str(e))
 
     def _multi_rename(self, paths: list[str]):
         from src.rename_dialog import RenameDialog
@@ -839,14 +878,14 @@ class FilePanelTab(QWidget):
         if ok:
             self.status_message.emit(f"Comprimido: {os.path.basename(result)}")
         else:
-            QMessageBox.warning(self, "Error al comprimir", result)
+            QMessageBox.warning(self, t("err.compress_title"), result)
 
     def _extract_selected(self, path: str):
         ok, result = extract_archive(path, self.current_path())
         if ok:
             self.status_message.emit(f"Extraído en: {self.current_path()}")
         else:
-            QMessageBox.warning(self, "Error al extraer", result)
+            QMessageBox.warning(self, t("err.extract_title"), result)
 
     def _open_with(self, path: str):
         if sys.platform == "win32":
@@ -855,7 +894,7 @@ class FilePanelTab(QWidget):
                 subprocess.run(["rundll32", "shell32.dll,OpenAs_RunDLL", path],
                                check=False)
             except Exception:
-                pass
+                _log.exception("Failed to open 'Open with' dialog for %s", path)
 
     def _show_properties(self, path: str):
         from src.properties_dialog import PropertiesDialog
@@ -878,7 +917,7 @@ class FilePanelTab(QWidget):
         if mod == Ctrl:
             if   key == Qt.Key.Key_C and paths: cb.copy(paths)
             elif key == Qt.Key.Key_X and paths: cb.cut(paths)
-            elif key == Qt.Key.Key_V:           paste_files(self.current_path(), self)
+            elif key == Qt.Key.Key_V:           self._paste_here()
             elif key == Qt.Key.Key_A:           self._active_view().selectAll()
             elif key in (Qt.Key.Key_R, Qt.Key.Key_F5): self.refresh()
             elif key == Qt.Key.Key_Z:           self.go_back()
@@ -904,11 +943,10 @@ class FilePanelTab(QWidget):
                 if os.path.isdir(p): self.navigate_to(p)
                 else:                open_file(p)
         elif key == Qt.Key.Key_Space:
-            paths = self.selected_paths()
             if paths:
-                if not self._preview.isVisible():
-                    self._preview.setVisible(True)
-                self._preview.show_file(paths[0])
+                from src.widgets.quick_look import QuickLookDialog
+                dlg = QuickLookDialog(paths[0], self)
+                dlg.exec()
         elif key == Qt.Key.Key_Escape:
             if self._recursive_mode and self._results_panel.isVisible():
                 self._stop_recursive_search()
@@ -944,16 +982,6 @@ class FilePanelTab(QWidget):
 
     # ── Drag & Drop ───────────────────────────────────────
 
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Space:
-            paths = self.selected_paths()
-            if paths:
-                from src.widgets.quick_look import QuickLookDialog
-                dlg = QuickLookDialog(paths[0], self)
-                dlg.exec()
-                return
-        super().keyPressEvent(event)
-
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
@@ -963,5 +991,5 @@ class FilePanelTab(QWidget):
         paths = [url.toLocalFile() for url in event.mimeData().urls()]
         cb    = get_clipboard()
         cb.copy(paths)
-        paste_files(dest, self)
+        self._paste_to(dest)
         event.acceptProposedAction()

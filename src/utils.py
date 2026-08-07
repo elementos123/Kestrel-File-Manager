@@ -151,18 +151,10 @@ def get_drive_label(drive: str) -> str:
         letter = drive.rstrip("\\")
         if label:
             return f"{label} ({letter})"
-        return f"Disco local ({letter})"
+        from src.i18n import t
+        return t("drive.local_disk", letter=letter)
     except Exception:
         return drive
-
-
-def get_drive_icon(drive: str) -> str:
-    if sys.platform != "win32":
-        return "💾"
-    letter = drive[0].upper()
-    if letter == "C":
-        return "💿"
-    return "💾"
 
 
 def open_file(path: str) -> None:
@@ -205,15 +197,16 @@ def open_in_terminal(path: str, preferred: str = "auto") -> None:
 
 
 def get_user_dirs() -> dict[str, str]:
+    from src.i18n import t
     home = Path.home()
     dirs = {
-        "🏠  Inicio":       str(home),
-        "🖥  Escritorio":   str(home / "Desktop"),
-        "⬇  Descargas":    str(home / "Downloads"),
-        "📄  Documentos":   str(home / "Documents"),
-        "🖼  Imágenes":     str(home / "Pictures"),
-        "🎵  Música":       str(home / "Music"),
-        "🎬  Vídeos":       str(home / "Videos"),
+        t("dir.home"):      str(home),
+        t("dir.desktop"):   str(home / "Desktop"),
+        t("dir.downloads"): str(home / "Downloads"),
+        t("dir.documents"): str(home / "Documents"),
+        t("dir.pictures"):  str(home / "Pictures"),
+        t("dir.music"):     str(home / "Music"),
+        t("dir.videos"):    str(home / "Videos"),
     }
     return {k: v for k, v in dirs.items() if os.path.exists(v)}
 

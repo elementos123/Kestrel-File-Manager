@@ -6,12 +6,14 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit,
     QStackedWidget, QFrame, QScrollArea, QSizePolicy,
-    QPushButton, QToolButton, QSlider,
+    QPushButton, QToolButton, QSlider, QFileIconProvider,
 )
-from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer, QFileInfo
 from PyQt6.QtGui import QPixmap, QFont, QTextCharFormat, QColor, QSyntaxHighlighter
 
-from src.utils import is_image, is_text, format_size, format_date, get_file_icon, read_text_preview
+from src.utils import is_image, is_text, format_size, format_date, read_text_preview
+
+_icon_provider = QFileIconProvider()
 
 
 # ── Async thumbnail loader ─────────────────────────────────
@@ -252,7 +254,7 @@ class PreviewPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("PreviewPanel")
-        self.setMinimumWidth(230)
+        self.setMinimumWidth(190)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
 
         root = QVBoxLayout(self)
@@ -443,9 +445,10 @@ class PreviewPanel(QWidget):
         name = os.path.basename(path) or path
 
         # Big icon
-        icon_lbl = QLabel(get_file_icon(path, is_dir))
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(_icon_provider.icon(QFileInfo(path)).pixmap(48, 48))
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_lbl.setStyleSheet("font-size: 48px; padding: 12px 0 6px 0;")
+        icon_lbl.setStyleSheet("padding: 12px 0 6px 0;")
         self._info_layout.addWidget(icon_lbl)
 
         # Name
