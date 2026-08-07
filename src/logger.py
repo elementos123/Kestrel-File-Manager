@@ -3,8 +3,8 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-LOG_DIR = Path.home() / ".ultraexplorer" / "logs"
-LOG_FILE = LOG_DIR / "ultraexplorer.log"
+LOG_DIR = Path.home() / ".kestrel" / "logs"
+LOG_FILE = LOG_DIR / "kestrel.log"
 
 _configured = False
 
@@ -17,7 +17,7 @@ def _configure_root():
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-    root = logging.getLogger("ultraexplorer")
+    root = logging.getLogger("kestrel")
     root.setLevel(logging.DEBUG)
 
     file_handler = RotatingFileHandler(
@@ -37,4 +37,4 @@ def _configure_root():
 
 def get_logger(name: str) -> logging.Logger:
     _configure_root()
-    return logging.getLogger(f"ultraexplorer.{name}")
+    return logging.getLogger(f"kestrel.{name}")

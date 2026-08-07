@@ -17,8 +17,8 @@ _LANG = "es"
 STRINGS: dict[str, dict[str, str]] = {
     "es": {
         # Window / app
-        "app.title": "Explorador de Archivos",
-        "app.about.version": "Versión 3.0",
+        "app.title": "Kestrel",
+        "app.about.version": "Versión 1.0.0",
         "app.about.tagline": "Python + PyQt6 · Fluent Design",
         "app.about.features": (
             "Thumbnails · Pestañas · Vista previa · Búsqueda recursiva<br>"
@@ -163,7 +163,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "err.settings_save_failed": "No se pudo guardar la configuración: {error}",
         "err.crash_title": "Error inesperado",
         "err.crash_body": (
-            "UltraExplorer encontró un error inesperado y necesita cerrarse.\n\n"
+            "Kestrel encontró un error inesperado y necesita cerrarse.\n\n"
             "Se ha guardado un registro en:\n{log_path}\n\n"
             "Detalle: {error}"
         ),
@@ -212,23 +212,23 @@ STRINGS: dict[str, dict[str, str]] = {
         "dfm.section": "Explorador de archivos predeterminado",
         "dfm.hint_windows": (
             "Al activarlo, hacer doble clic en una carpeta o unidad — o pulsar Win+E — "
-            "la abrirá con UltraExplorer en vez del explorador del sistema. Solo afecta "
+            "la abrirá con Kestrel en vez del explorador del sistema. Solo afecta "
             "a tu usuario y puedes quitarlo cuando quieras desde aquí mismo."
         ),
         "dfm.hint_linux": (
-            "Al activarlo, tu escritorio abrirá las carpetas con UltraExplorer en vez "
+            "Al activarlo, tu escritorio abrirá las carpetas con Kestrel en vez "
             "del explorador del sistema. Solo afecta a tu usuario y puedes quitarlo "
             "cuando quieras desde aquí mismo. Linux no tiene un atajo de teclado "
             "universal equivalente a Win+E (depende del escritorio) — puedes asignar "
             "uno tú mismo en los ajustes de atajos de tu entorno, apuntando a "
-            "UltraExplorer."
+            "Kestrel."
         ),
-        "dfm.is_default": "✓  UltraExplorer es tu explorador predeterminado",
-        "dfm.not_default": "UltraExplorer no es tu explorador predeterminado",
+        "dfm.is_default": "✓  Kestrel es tu explorador predeterminado",
+        "dfm.not_default": "Kestrel no es tu explorador predeterminado",
         "dfm.set_button": "Establecer como predeterminado",
         "dfm.unset_button": "Quitar como predeterminado",
         "dfm.unsupported": "No disponible en esta plataforma",
-        "dfm.set_ok": "Listo — UltraExplorer es ahora tu explorador predeterminado.",
+        "dfm.set_ok": "Listo — Kestrel es ahora tu explorador predeterminado.",
         "dfm.unset_ok": "Hecho — se restauró el explorador predeterminado anterior.",
         "dfm.error_title": "Explorador predeterminado",
         "dfm.error_body": "No se pudo completar la operación:\n{error}",
@@ -290,7 +290,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "dlg.shortcuts.view_all_button": "Ver atajos de teclado",
 
         # Welcome / onboarding dialog
-        "dlg.welcome.title": "Bienvenido a UltraExplorer",
+        "dlg.welcome.title": "Bienvenido a Kestrel",
         "dlg.welcome.heading": "Explora tus archivos a máxima velocidad",
         "dlg.welcome.subtitle": "Unos atajos rápidos para empezar con buen pie:",
         "dlg.welcome.card.spotlight.title": "Spotlight",
@@ -317,8 +317,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "spotlight.cmd.show_shortcuts": "Ver atajos de teclado",
     },
     "en": {
-        "app.title": "File Explorer",
-        "app.about.version": "Version 3.0",
+        "app.title": "Kestrel",
+        "app.about.version": "Version 1.0.0",
         "app.about.tagline": "Python + PyQt6 · Fluent Design",
         "app.about.features": (
             "Thumbnails · Tabs · Preview · Recursive search<br>"
@@ -457,7 +457,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "err.settings_save_failed": "Could not save settings: {error}",
         "err.crash_title": "Unexpected error",
         "err.crash_body": (
-            "UltraExplorer hit an unexpected error and needs to close.\n\n"
+            "Kestrel hit an unexpected error and needs to close.\n\n"
             "A log was saved to:\n{log_path}\n\n"
             "Detail: {error}"
         ),
@@ -504,24 +504,24 @@ STRINGS: dict[str, dict[str, str]] = {
         "dfm.section": "Default file manager",
         "dfm.hint_windows": (
             "Turning this on makes double-clicking a folder or drive — or pressing "
-            "Win+E — open it with UltraExplorer instead of the system file manager. "
+            "Win+E — open it with Kestrel instead of the system file manager. "
             "Only affects your user account, and you can remove it any time from "
             "right here."
         ),
         "dfm.hint_linux": (
-            "Turning this on makes your desktop open folders with UltraExplorer "
+            "Turning this on makes your desktop open folders with Kestrel "
             "instead of the system file manager. Only affects your user account, and "
             "you can remove it any time from right here. Linux has no universal "
             "keyboard shortcut equivalent to Win+E (it depends on your desktop "
             "environment) — you can bind one yourself in your desktop's shortcut "
-            "settings, pointing it at UltraExplorer."
+            "settings, pointing it at Kestrel."
         ),
-        "dfm.is_default": "✓  UltraExplorer is your default file manager",
-        "dfm.not_default": "UltraExplorer is not your default file manager",
+        "dfm.is_default": "✓  Kestrel is your default file manager",
+        "dfm.not_default": "Kestrel is not your default file manager",
         "dfm.set_button": "Set as default",
         "dfm.unset_button": "Remove as default",
         "dfm.unsupported": "Not available on this platform",
-        "dfm.set_ok": "Done — UltraExplorer is now your default file manager.",
+        "dfm.set_ok": "Done — Kestrel is now your default file manager.",
         "dfm.unset_ok": "Done — restored your previous default file manager.",
         "dfm.error_title": "Default file manager",
         "dfm.error_body": "Couldn't complete the operation:\n{error}",
@@ -581,7 +581,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "dlg.shortcuts.archive.extract_hint": "Right click → Extract here",
         "dlg.shortcuts.view_all_button": "View keyboard shortcuts",
 
-        "dlg.welcome.title": "Welcome to UltraExplorer",
+        "dlg.welcome.title": "Welcome to Kestrel",
         "dlg.welcome.heading": "Browse your files at full speed",
         "dlg.welcome.subtitle": "A few quick shortcuts to get you started:",
         "dlg.welcome.card.spotlight.title": "Spotlight",

@@ -3,7 +3,7 @@
 block_cipher = None
 
 added_files = [
-    ('ultraexplorer.png', '.'),
+    ('kestrel.png', '.'),
 ]
 
 a = Analysis(
@@ -26,7 +26,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='UltraExplorer',
+    name='Kestrel',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -46,5 +46,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='UltraExplorer',
+    name='Kestrel',
 )

@@ -42,9 +42,9 @@ def main():
     _install_excepthook()
 
     app = QApplication(sys.argv)
-    app.setApplicationName("UltraExplorer")
+    app.setApplicationName("Kestrel")
     app.setApplicationVersion("1.0")
-    app.setOrganizationName("UltraExplorerProject")
+    app.setOrganizationName("Kestrel")
     app.setStyle("Fusion")
 
     settings = load_settings()

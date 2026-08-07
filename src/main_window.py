@@ -1308,13 +1308,13 @@ class MainWindow(QMainWindow):
     # ── Persist window state ──────────────────────────────
 
     def _restore_geometry(self):
-        qs = QSettings("FileExplorer", "MainWindow")
+        qs = QSettings("Kestrel", "MainWindow")
         geo = qs.value("geometry")
         if geo:
             self.restoreGeometry(geo)
 
     def closeEvent(self, event):
-        qs = QSettings("FileExplorer", "MainWindow")
+        qs = QSettings("Kestrel", "MainWindow")
         qs.setValue("geometry", self.saveGeometry())
         # Save tab sessions
         if self._settings.get("restore_tabs"):

@@ -24,7 +24,7 @@ from src.logger import get_logger
 from src import icon_provider as ico
 
 
-SETTINGS_FILE = str(Path.home() / ".file_explorer_settings.json")
+SETTINGS_FILE = str(Path.home() / ".kestrel_settings.json")
 
 _UI_FONT_OPTIONS = [
     "Segoe UI", "Segoe UI Variable", "Arial", "Calibri", "Cambria", "Candara",

@@ -1,4 +1,4 @@
-# UltraExplorer — Next-Gen File Manager for Power Users
+# Kestrel — Next-Gen File Manager for Power Users
 
 A fast, keyboard-first file manager built with Python 3 and PyQt6, combining
 the muscle memory of classic file managers with a modern Fluent Design
@@ -12,10 +12,10 @@ box.
 
 ## English
 
-### Why UltraExplorer
+### Why Kestrel
 
 Most file manager side-projects are a thin skin over `QFileSystemModel`.
-UltraExplorer instead treats the everyday friction points — slow copies that
+Kestrel instead treats the everyday friction points — slow copies that
 freeze the UI, no keyboard-only workflow, no accessibility story, nothing to
 help a first-time user find their footing — as the actual product. It ships
 with logging and a crash handler instead of silent failures, a high-contrast
@@ -47,20 +47,20 @@ for both Windows and Linux instead of "clone and hope `pip install` works."
 - **English / Spanish UI**, switchable from Settings.
 - **Optional default file manager integration** — one click in Settings to
   make double-clicking a folder (and, on Windows, the Win+E shortcut) open
-  UltraExplorer instead of the system file manager. Entirely opt-in, and one
+  Kestrel instead of the system file manager. Entirely opt-in, and one
   more click removes it and restores exactly what you had before.
 
 ### Installing
 
-**Windows** — download `UltraExplorer_Setup.exe` from the
+**Windows** — download `Kestrel_Setup.exe` from the
 [latest release](../../releases/latest) and run it. No dependencies needed.
 
-**Linux** — download `UltraExplorer-x86_64.AppImage` from the
+**Linux** — download `Kestrel-x86_64.AppImage` from the
 [latest release](../../releases/latest):
 
 ```bash
-chmod +x UltraExplorer-x86_64.AppImage
-./UltraExplorer-x86_64.AppImage
+chmod +x Kestrel-x86_64.AppImage
+./Kestrel-x86_64.AppImage
 ```
 
 Needs `libfuse2` on the system (already present on most desktop distros).
@@ -71,8 +71,8 @@ on any architecture pip has wheels for).
 **From source** (any platform):
 
 ```bash
-git clone https://github.com/elementos123/UltraExplorer-Next-Gen-File-Manager-for-Power-Users.git
-cd UltraExplorer-Next-Gen-File-Manager-for-Power-Users
+git clone https://github.com/elementos123/Kestrel-File-Manager.git
+cd Kestrel-File-Manager
 pip install -r requirements.txt
 python main.py
 ```
@@ -96,7 +96,7 @@ QtAwesome icon set · `send2trash` for safe deletes.
 
 ### Building the installers
 
-- Windows: `pyinstaller UltraExplorer.spec` then compile
+- Windows: `pyinstaller Kestrel.spec` then compile
   `installer_config.iss` with Inno Setup 6.
 - Linux: `./linux/build_appimage.sh` (Ubuntu/Debian; installs its own build
   dependencies).
@@ -117,10 +117,10 @@ copyright notice.
 
 ## Español
 
-### Por qué UltraExplorer
+### Por qué Kestrel
 
 La mayoría de exploradores de archivos "de proyecto personal" son una capa
-fina sobre `QFileSystemModel`. UltraExplorer trata en cambio los problemas
+fina sobre `QFileSystemModel`. Kestrel trata en cambio los problemas
 reales del día a día — copias lentas que congelan la interfaz, nada de
 flujo por teclado, cero accesibilidad, nada que ayude a un usuario nuevo a
 orientarse — como el producto en sí. Trae logging y un manejador de errores
@@ -156,20 +156,20 @@ funcione".
 - **Interfaz en español e inglés**, cambiable desde Ajustes.
 - **Integración opcional como explorador predeterminado** — un clic en
   Ajustes para que hacer doble clic en una carpeta (y, en Windows, el atajo
-  Win+E) abra UltraExplorer en vez del explorador del sistema. Totalmente
+  Win+E) abra Kestrel en vez del explorador del sistema. Totalmente
   opcional, y otro clic lo quita y restaura exactamente lo que tenías antes.
 
 ### Instalación
 
-**Windows** — descarga `UltraExplorer_Setup.exe` desde la
+**Windows** — descarga `Kestrel_Setup.exe` desde la
 [última versión](../../releases/latest) y ejecútalo. Sin dependencias que instalar.
 
-**Linux** — descarga `UltraExplorer-x86_64.AppImage` desde la
+**Linux** — descarga `Kestrel-x86_64.AppImage` desde la
 [última versión](../../releases/latest):
 
 ```bash
-chmod +x UltraExplorer-x86_64.AppImage
-./UltraExplorer-x86_64.AppImage
+chmod +x Kestrel-x86_64.AppImage
+./Kestrel-x86_64.AppImage
 ```
 
 Necesita `libfuse2` en el sistema (ya presente en la mayoría de distros de
@@ -180,8 +180,8 @@ escritorio). ¿Prefieres una instalación sin AppImage/FUSE? Mira
 **Desde el código fuente** (cualquier plataforma):
 
 ```bash
-git clone https://github.com/elementos123/UltraExplorer-Next-Gen-File-Manager-for-Power-Users.git
-cd UltraExplorer-Next-Gen-File-Manager-for-Power-Users
+git clone https://github.com/elementos123/Kestrel-File-Manager.git
+cd Kestrel-File-Manager
 pip install -r requirements.txt
 python main.py
 ```
@@ -205,7 +205,7 @@ Iconos QtAwesome · `send2trash` para borrado seguro.
 
 ### Construir los instaladores
 
-- Windows: `pyinstaller UltraExplorer.spec` y luego compila
+- Windows: `pyinstaller Kestrel.spec` y luego compila
   `installer_config.iss` con Inno Setup 6.
 - Linux: `./linux/build_appimage.sh` (Ubuntu/Debian; instala sus propias
   dependencias de compilación).

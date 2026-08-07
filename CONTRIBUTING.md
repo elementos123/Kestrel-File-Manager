@@ -1,4 +1,4 @@
-# Contributing to UltraExplorer
+# Contributing to Kestrel
 
 **Read this in: [English](#english) · [Español](#español)**
 
@@ -16,9 +16,9 @@ By participating in this project you agree to follow our
 
 Search [existing issues](../../issues) first to avoid duplicates, then open a
 new one using the **Bug report** template. Include your OS, how you installed
-UltraExplorer (installer/AppImage/from source), steps to reproduce, and — if
-the app crashed — the relevant log from `~/.ultraexplorer/logs/ultraexplorer.log`
-(Windows: `%USERPROFILE%\.ultraexplorer\logs\`).
+Kestrel (installer/AppImage/from source), steps to reproduce, and — if
+the app crashed — the relevant log from `~/.kestrel/logs/kestrel.log`
+(Windows: `%USERPROFILE%\.kestrel\logs\`).
 
 ### Suggesting features
 
@@ -29,8 +29,8 @@ easier to discuss alternatives.
 ### Development setup
 
 ```bash
-git clone https://github.com/elementos123/UltraExplorer-Next-Gen-File-Manager-for-Power-Users.git
-cd UltraExplorer-Next-Gen-File-Manager-for-Power-Users
+git clone https://github.com/elementos123/Kestrel-File-Manager.git
+cd Kestrel-File-Manager
 pip install -r requirements.txt
 python main.py
 ```
@@ -78,10 +78,10 @@ Al participar en este proyecto aceptas seguir nuestro
 
 Busca primero en los [issues existentes](../../issues) para evitar duplicados,
 y luego abre uno nuevo usando la plantilla **Bug report**. Incluye tu sistema
-operativo, cómo instalaste UltraExplorer (instalador/AppImage/código fuente),
+operativo, cómo instalaste Kestrel (instalador/AppImage/código fuente),
 pasos para reproducirlo y, si la app se cerró inesperadamente, el log
-correspondiente en `~/.ultraexplorer/logs/ultraexplorer.log` (Windows:
-`%USERPROFILE%\.ultraexplorer\logs\`).
+correspondiente en `~/.kestrel/logs/kestrel.log` (Windows:
+`%USERPROFILE%\.kestrel\logs\`).
 
 ### Sugerir funciones
 
@@ -92,8 +92,8 @@ discutir alternativas.
 ### Configurar el entorno de desarrollo
 
 ```bash
-git clone https://github.com/elementos123/UltraExplorer-Next-Gen-File-Manager-for-Power-Users.git
-cd UltraExplorer-Next-Gen-File-Manager-for-Power-Users
+git clone https://github.com/elementos123/Kestrel-File-Manager.git
+cd Kestrel-File-Manager
 pip install -r requirements.txt
 python main.py
 ```

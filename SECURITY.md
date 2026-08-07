@@ -39,7 +39,7 @@ rather stay anonymous) in the release notes.
 
 ### Scope notes
 
-UltraExplorer is a desktop file manager. Things particularly worth flagging:
+Kestrel is a desktop file manager. Things particularly worth flagging:
 
 - Any file operation (copy/move/delete/rename) that could escape its intended
   target path (path traversal, symlink handling).
@@ -88,7 +88,7 @@ problema (salvo que prefiera mantenerse anónimo) en las notas de la release.
 
 ### Notas de alcance
 
-UltraExplorer es un explorador de archivos de escritorio. Aspectos
+Kestrel es un explorador de archivos de escritorio. Aspectos
 especialmente relevantes para reportar:
 
 - Cualquier operación de archivos (copiar/mover/borrar/renombrar) que pueda

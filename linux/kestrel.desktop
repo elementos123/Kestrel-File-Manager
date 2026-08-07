@@ -1,11 +1,11 @@
 [Desktop Entry]
 Type=Application
-Name=UltraExplorer
+Name=Kestrel
 GenericName=File Manager
 Comment=Explorador de archivos de alto rendimiento para usuarios avanzados
-Exec=UltraExplorer %f
-Icon=ultraexplorer
+Exec=Kestrel %f
+Icon=kestrel
 Categories=Utility;FileManager;System;
 Terminal=false
-StartupWMClass=UltraExplorer
+StartupWMClass=Kestrel
 MimeType=inode/directory;

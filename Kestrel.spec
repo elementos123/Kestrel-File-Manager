@@ -3,7 +3,7 @@
 block_cipher = None
 
 added_files = [
-    ('UltraExplorer.ico', '.'),
+    ('Kestrel.ico', '.'),
 ]
 
 a = Analysis(
@@ -28,7 +28,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='UltraExplorer',
+    name='Kestrel',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -39,7 +39,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['UltraExplorer.ico'],
+    icon=['Kestrel.ico'],
 )
 coll = COLLECT(
     exe,
@@ -49,5 +49,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='UltraExplorer',
+    name='Kestrel',
 )

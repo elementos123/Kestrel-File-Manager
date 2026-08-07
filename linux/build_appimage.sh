@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build a self-contained UltraExplorer-x86_64.AppImage from source.
+# Build a self-contained Kestrel-x86_64.AppImage from source.
 #
 # Run this on a real Linux machine (or WSL with WSLg/an X server available
 # for interactive use — the build itself doesn't need a display). Tested on
@@ -9,7 +9,7 @@
 # Usage:
 #   cd linux && ./build_appimage.sh
 #
-# Output: UltraExplorer-x86_64.AppImage in the repo root.
+# Output: Kestrel-x86_64.AppImage in the repo root.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."   # repo root
@@ -36,21 +36,21 @@ pip install -r requirements.txt pyinstaller -q
 echo "==> Rendering a Linux-sized app icon"
 python3 -c "
 from PIL import Image
-Image.open('UltraExplorer.ico').convert('RGBA').resize((256, 256), Image.LANCZOS).save('assets/ultraexplorer.png')
+Image.open('Kestrel.ico').convert('RGBA').resize((256, 256), Image.LANCZOS).save('assets/kestrel.png')
 "
 
 echo "==> Building with PyInstaller"
 rm -rf build dist
-pyinstaller UltraExplorer-linux.spec --noconfirm
+pyinstaller Kestrel-linux.spec --noconfirm
 
 echo "==> Assembling AppDir"
 APPDIR="$WORK/AppDir"
 mkdir -p "$APPDIR/usr/bin"
-cp -r dist/UltraExplorer/* "$APPDIR/usr/bin/"
-cp linux/ultraexplorer.desktop "$APPDIR/"
+cp -r dist/Kestrel/* "$APPDIR/usr/bin/"
+cp linux/kestrel.desktop "$APPDIR/"
 cp linux/AppRun "$APPDIR/AppRun"
 chmod +x "$APPDIR/AppRun"
-cp assets/ultraexplorer.png "$APPDIR/ultraexplorer.png"
+cp assets/kestrel.png "$APPDIR/kestrel.png"
 
 echo "==> Fetching appimagetool"
 if [ ! -f "$WORK/appimagetool" ]; then
@@ -59,7 +59,7 @@ if [ ! -f "$WORK/appimagetool" ]; then
 fi
 
 echo "==> Packaging AppImage"
-rm -f UltraExplorer-x86_64.AppImage
-ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$WORK/appimagetool" "$APPDIR" UltraExplorer-x86_64.AppImage
+rm -f Kestrel-x86_64.AppImage
+ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$WORK/appimagetool" "$APPDIR" Kestrel-x86_64.AppImage
 
-echo "==> Done: $ROOT/UltraExplorer-x86_64.AppImage"
+echo "==> Done: $ROOT/Kestrel-x86_64.AppImage"

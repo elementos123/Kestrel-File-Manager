@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability / Vulnerabilidad de seguridad
-    url: https://github.com/elementos123/UltraExplorer-Next-Gen-File-Manager-for-Power-Users/security/advisories/new
+    url: https://github.com/elementos123/Kestrel-File-Manager/security/advisories/new
     about: Please report security issues privately, not as a public issue. / Por favor reporta problemas de seguridad en privado, no como issue público.

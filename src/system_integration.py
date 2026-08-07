@@ -9,7 +9,7 @@ back to the system default automatically.
 
 Linux: uses the standard freedesktop mimeapps.list mechanism for the
 inode/directory MIME type. Whatever was previously set is remembered
-under a private [X-UltraExplorer-Backup] section so it can be restored
+under a private [X-Kestrel-Backup] section so it can be restored
 exactly when the user turns this back off.
 
 Every function here only runs when the user explicitly asks (a button in
@@ -29,7 +29,7 @@ from src.logger import get_logger
 _log = get_logger("system_integration")
 
 _MIME = "inode/directory"
-_DESKTOP_NAME = "ultraexplorer.desktop"
+_DESKTOP_NAME = "kestrel.desktop"
 
 
 def _app_path() -> str:
@@ -137,7 +137,7 @@ def _set_default_windows() -> Tuple[bool, str]:
                 pass
         return True, ""
     except OSError as e:
-        _log.exception("Failed to set UltraExplorer as default file manager")
+        _log.exception("Failed to set Kestrel as default file manager")
         return False, str(e)
 
 
@@ -151,7 +151,7 @@ def _unset_default_windows() -> Tuple[bool, str]:
                 pass
         return True, ""
     except OSError as e:
-        _log.exception("Failed to unset UltraExplorer as default file manager")
+        _log.exception("Failed to unset Kestrel as default file manager")
         return False, str(e)
 
 
@@ -182,14 +182,14 @@ def _ensure_desktop_file():
     content = (
         "[Desktop Entry]\n"
         "Type=Application\n"
-        "Name=UltraExplorer\n"
+        "Name=Kestrel\n"
         "GenericName=File Manager\n"
         "Comment=Explorador de archivos de alto rendimiento para usuarios avanzados\n"
         f"Exec={_linux_exec_line()}\n"
-        "Icon=ultraexplorer\n"
+        "Icon=kestrel\n"
         "Categories=Utility;FileManager;System;\n"
         "Terminal=false\n"
-        "StartupWMClass=UltraExplorer\n"
+        "StartupWMClass=Kestrel\n"
         f"MimeType={_MIME};\n"
     )
     _desktop_file().write_text(content, encoding="utf-8")
@@ -226,9 +226,9 @@ def _set_default_linux() -> Tuple[bool, str]:
 
         previous = cp.get("Default Applications", _MIME, fallback="").strip().rstrip(";")
         if previous and previous != _DESKTOP_NAME:
-            if not cp.has_section("X-UltraExplorer-Backup"):
-                cp.add_section("X-UltraExplorer-Backup")
-            cp.set("X-UltraExplorer-Backup", _MIME, previous)
+            if not cp.has_section("X-Kestrel-Backup"):
+                cp.add_section("X-Kestrel-Backup")
+            cp.set("X-Kestrel-Backup", _MIME, previous)
 
         cp.set("Default Applications", _MIME, _DESKTOP_NAME)
         _write_mimeapps(cp)
@@ -237,7 +237,7 @@ def _set_default_linux() -> Tuple[bool, str]:
             subprocess.run(["xdg-mime", "default", _DESKTOP_NAME, _MIME], check=False)
         return True, ""
     except Exception as e:
-        _log.exception("Failed to set UltraExplorer as default file manager")
+        _log.exception("Failed to set Kestrel as default file manager")
         return False, str(e)
 
 
@@ -245,9 +245,9 @@ def _unset_default_linux() -> Tuple[bool, str]:
     try:
         cp = _read_mimeapps()
         restore = ""
-        if cp.has_section("X-UltraExplorer-Backup"):
-            restore = cp.get("X-UltraExplorer-Backup", _MIME, fallback="").strip()
-            cp.remove_option("X-UltraExplorer-Backup", _MIME)
+        if cp.has_section("X-Kestrel-Backup"):
+            restore = cp.get("X-Kestrel-Backup", _MIME, fallback="").strip()
+            cp.remove_option("X-Kestrel-Backup", _MIME)
 
         if cp.has_section("Default Applications"):
             if restore:
@@ -263,5 +263,5 @@ def _unset_default_linux() -> Tuple[bool, str]:
                 subprocess.run(["xdg-mime", "default", target, _MIME], check=False)
         return True, ""
     except Exception as e:
-        _log.exception("Failed to unset UltraExplorer as default file manager")
+        _log.exception("Failed to unset Kestrel as default file manager")
         return False, str(e)

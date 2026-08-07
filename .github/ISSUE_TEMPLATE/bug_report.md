@@ -34,17 +34,17 @@ If applicable, add screenshots. / Si aplica, añade capturas de pantalla.
 
 - OS / SO: [e.g. Windows 11, Ubuntu 22.04]
 - Install method / Método de instalación: [installer .exe / AppImage / install.sh / from source]
-- UltraExplorer version / Versión: [e.g. v1.0.0]
+- Kestrel version / Versión: [e.g. v1.0.0]
 
 **Log file / Archivo de log**
 
 If the app crashed or misbehaved, attach the relevant lines from
-`~/.ultraexplorer/logs/ultraexplorer.log` (Windows:
-`%USERPROFILE%\.ultraexplorer\logs\`).
+`~/.kestrel/logs/kestrel.log` (Windows:
+`%USERPROFILE%\.kestrel\logs\`).
 
 Si la app se cerró o se comportó mal, adjunta las líneas relevantes de
-`~/.ultraexplorer/logs/ultraexplorer.log` (Windows:
-`%USERPROFILE%\.ultraexplorer\logs\`).
+`~/.kestrel/logs/kestrel.log` (Windows:
+`%USERPROFILE%\.kestrel\logs\`).
 
 **Additional context / Contexto adicional**
 

@@ -1,15 +1,15 @@
 # Instalación en Linux
 
-Dos formas de instalar UltraExplorer, según lo que prefieras:
+Dos formas de instalar Kestrel, según lo que prefieras:
 
 ## Opción 1 — AppImage (recomendada)
 
-Descarga `UltraExplorer-x86_64.AppImage` desde `user_installer/`, dale permiso de
+Descarga `Kestrel-x86_64.AppImage` desde `user_installer/`, dale permiso de
 ejecución y lánzala. No necesita instalación ni root:
 
 ```bash
-chmod +x UltraExplorer-x86_64.AppImage
-./UltraExplorer-x86_64.AppImage
+chmod +x Kestrel-x86_64.AppImage
+./Kestrel-x86_64.AppImage
 ```
 
 Todo (Python, PyQt6, fuentes de iconos) va empaquetado dentro — solo necesitas
@@ -33,7 +33,7 @@ Python 3 instalado en el sistema.
 
 ## Explorador de archivos predeterminado y atajo de teclado
 
-Desde **Ajustes → Sistema** puedes marcar UltraExplorer como el explorador de
+Desde **Ajustes → Sistema** puedes marcar Kestrel como el explorador de
 archivos predeterminado (usa el mecanismo estándar de asociaciones MIME de
 freedesktop — `~/.config/mimeapps.list`). Es reversible desde el mismo sitio.
 
@@ -41,15 +41,15 @@ Linux no tiene un atajo de teclado universal equivalente a "Win+E" — depende
 de cada entorno de escritorio. Para asignar uno tú mismo:
 
 - **GNOME**: Ajustes → Teclado → Atajos personalizados → añade uno nuevo con
-  el comando `ultraexplorer` (o la ruta a la AppImage) y la combinación que
+  el comando `kestrel` (o la ruta a la AppImage) y la combinación que
   prefieras (ej. Super+E).
 - **KDE Plasma**: Ajustes del sistema → Atajos → Atajos personalizados → añade
-  una acción nueva de tipo "Comando/URL" apuntando a `ultraexplorer`.
+  una acción nueva de tipo "Comando/URL" apuntando a `kestrel`.
 - **XFCE**: Ajustes → Teclado → pestaña Atajos de aplicación → añadir.
 
 ## Archivos de esta carpeta
 
-- `ultraexplorer.desktop` — entrada de escritorio (freedesktop).
+- `kestrel.desktop` — entrada de escritorio (freedesktop).
 - `AppRun` — punto de entrada que usa el AppImage.
 - `build_appimage.sh` — reconstruye la AppImage desde cero.
 - `install.sh` — instalador alternativo basado en venv.
