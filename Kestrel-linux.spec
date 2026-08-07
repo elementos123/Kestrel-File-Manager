@@ -3,7 +3,7 @@
 block_cipher = None
 
 added_files = [
-    ('kestrel.png', '.'),
+    ('assets/kestrel.png', '.'),
 ]
 
 a = Analysis(
