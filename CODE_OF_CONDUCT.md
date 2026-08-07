@@ -53,7 +53,7 @@ representing the community in public spaces.
 ### Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the maintainers at **yubalalberto1962@gmail.com**. All complaints
+reported to the maintainers at **yubal@safelix.es**. All complaints
 will be reviewed and investigated promptly and fairly.
 
 ### Attribution
@@ -118,7 +118,7 @@ a la comunidad en espacios públicos.
 ### Aplicación
 
 Los casos de comportamiento abusivo, acosador o inaceptable pueden reportarse
-a quienes mantienen el proyecto en **yubalalberto1962@gmail.com**. Todas las
+a quienes mantienen el proyecto en **yubal@safelix.es**. Todas las
 quejas serán revisadas e investigadas de forma pronta y justa.
 
 ### Atribución

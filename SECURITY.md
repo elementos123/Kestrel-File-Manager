@@ -25,7 +25,7 @@ Instead, report it privately using one of these two channels:
 
 1. [GitHub Security Advisories](../../security/advisories/new) for this
    repository (preferred — keeps the discussion private until a fix ships), or
-2. Email **yubalalberto1962@gmail.com** with details.
+2. Email **yubal@safelix.es** with details.
 
 Please include:
 
@@ -74,7 +74,7 @@ En su lugar, repórtala en privado usando uno de estos dos canales:
 1. [GitHub Security Advisories](../../security/advisories/new) de este
    repositorio (preferido — mantiene la conversación privada hasta que se
    publique una corrección), o
-2. Correo a **yubalalberto1962@gmail.com** con los detalles.
+2. Correo a **yubal@safelix.es** con los detalles.
 
 Por favor incluye:
 
